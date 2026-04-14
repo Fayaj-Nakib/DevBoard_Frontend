@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 
+interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export function useWorkspaces() {
-  const [workspaces, setWorkspaces] = useState([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -13,7 +19,7 @@ export function useWorkspaces() {
 
   const create = async (name: string) => {
     const { data } = await api.post('/workspaces', { name });
-    setWorkspaces((prev: any) => [...prev, data]);
+    setWorkspaces((prev) => [...prev, data]);
     return data;
   };
 
