@@ -2,6 +2,26 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
+function apiError(err: unknown): string {
+  if (!err || typeof err !== 'object') return 'Something went wrong.';
+  const e = err as {
+    response?: { data?: { message?: string; errors?: Record<string, string[]> } };
+  };
+
+  if (!e.response) {
+    return 'Cannot reach the server. Check your connection or try again shortly.';
+  }
+
+  const { data } = e.response;
+
+  if (data?.errors) {
+    const first = Object.values(data.errors).flat()[0];
+    if (first) return first;
+  }
+
+  return data?.message ?? 'Login failed.';
+}
+
 export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -9,14 +29,14 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
       await login(email, password);
-    } catch {
-      setError('Invalid email or password.');
+    } catch (err) {
+      setError(apiError(err));
     } finally {
       setLoading(false);
     }
@@ -66,9 +86,7 @@ export default function LoginPage() {
 
         <p className="text-sm text-gray-500 mt-4 text-center">
           No account?{' '}
-          <a href="/register" className="text-blue-600 hover:underline">
-            Register
-          </a>
+          <a href="/register" className="text-blue-600 hover:underline">Register</a>
         </p>
       </div>
     </div>

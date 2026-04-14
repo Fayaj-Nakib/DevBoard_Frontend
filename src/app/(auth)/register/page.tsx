@@ -2,6 +2,29 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
+/** Extract a human-readable message from an Axios error. */
+function apiError(err: unknown): string {
+  if (!err || typeof err !== 'object') return 'Something went wrong.';
+  const e = err as {
+    response?: { data?: { message?: string; errors?: Record<string, string[]> } };
+  };
+
+  // No response → network failure or CORS block
+  if (!e.response) {
+    return 'Cannot reach the server. Check your connection or try again shortly.';
+  }
+
+  const { data } = e.response;
+
+  // Laravel validation errors — show the first field message
+  if (data?.errors) {
+    const first = Object.values(data.errors).flat()[0];
+    if (first) return first;
+  }
+
+  return data?.message ?? 'Registration failed.';
+}
+
 export default function RegisterPage() {
   const { register } = useAuth();
   const [name, setName] = useState('');
@@ -10,14 +33,14 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
       await register(name, email, password);
-    } catch {
-      setError('Registration failed. Email may already be taken.');
+    } catch (err) {
+      setError(apiError(err));
     } finally {
       setLoading(false);
     }
@@ -78,9 +101,7 @@ export default function RegisterPage() {
 
         <p className="text-sm text-gray-500 mt-4 text-center">
           Already have an account?{' '}
-          <a href="/login" className="text-blue-600 hover:underline">
-            Sign in
-          </a>
+          <a href="/login" className="text-blue-600 hover:underline">Sign in</a>
         </p>
       </div>
     </div>
