@@ -2,7 +2,7 @@
 
 > Next.js frontend for DevBoard — a SaaS-style Kanban project management tool.
 
-[![Web CI](https://github.com/YOUR_GITHUB_USERNAME/devboard-web/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_GITHUB_USERNAME/devboard-web/actions/workflows/ci.yml)
+[![Web CI](https://github.com/Fayaj-Nakib/devboard-web/actions/workflows/ci.yml/badge.svg)](https://github.com/Fayaj-Nakib/devboard-web/actions/workflows/ci.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
@@ -14,7 +14,7 @@
 
 DevBoard is a full-stack project management tool inspired by tools like Linear and Trello. Teams can create **workspaces**, organise work into **projects**, and manage **tasks** on a drag-and-drop Kanban board.
 
-This repository is the **Next.js 16 / React 19 frontend**. The Laravel API lives in a separate repo — see [devboard-api](https://github.com/YOUR_GITHUB_USERNAME/devboard-api).
+This repository is the **Next.js 16 / React 19 frontend**. The Laravel API lives in a separate repo — see [devboard-api](https://github.com/Fayaj-Nakib/devboard-api).
 
 **Live demo:** https://devboard.vercel.app
 
@@ -103,13 +103,13 @@ _Screenshots coming soon._
 ### Prerequisites
 
 - Node.js 20+
-- The [devboard-api](https://github.com/YOUR_GITHUB_USERNAME/devboard-api) running locally on port 8000
+- The [devboard-api](https://github.com/Fayaj-Nakib/devboard-api) running locally on port 8000
 
 ### Steps
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_GITHUB_USERNAME/devboard-web.git
+git clone https://github.com/Fayaj-Nakib/devboard-web.git
 cd devboard-web
 
 # 2. Install dependencies
@@ -160,7 +160,7 @@ Three checks run on every push and PR to `main` / `develop`:
 2. **Type-check** — `tsc --noEmit` (zero type errors enforced)
 3. **Build** — `next build` (production build must succeed)
 
-Add the badge to your GitHub profile by replacing `YOUR_GITHUB_USERNAME` in the badge URL at the top of this file.
+Add the badge to your GitHub profile by replacing `Fayaj-Nakib` in the badge URL at the top of this file.
 
 ---
 
