@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import NotificationsBell from '@/components/NotificationsBell';
@@ -23,16 +23,16 @@ export default function ProjectsPage() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const fetchProjects = () => {
+  const fetchProjects = useCallback(() => {
     api
       .get(`/workspaces/${workspaceId}/projects`)
       .then((r) => setProjects(r.data))
       .finally(() => setLoading(false));
-  };
+  }, [workspaceId]);
 
   useEffect(() => {
     fetchProjects();
-  }, [workspaceId]);
+  }, [fetchProjects]);
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();

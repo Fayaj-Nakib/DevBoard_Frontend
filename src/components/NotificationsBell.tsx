@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 
 interface Notification {
@@ -18,7 +18,7 @@ export default function NotificationsBell() {
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = () => {
+  const fetchNotifications = useCallback(() => {
     setLoading(true);
     api
       .get('/notifications')
@@ -28,14 +28,14 @@ export default function NotificationsBell() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   // Poll every 30 s so the badge stays fresh
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchNotifications]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
