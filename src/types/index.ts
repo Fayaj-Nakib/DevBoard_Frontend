@@ -76,6 +76,7 @@ export interface Comment {
 
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
+export type RecurrenceRule = 'daily' | 'weekly' | 'weekday' | 'monthly';
 
 export interface Task {
   id: string;
@@ -83,6 +84,7 @@ export interface Task {
   parent_id?: string;
   milestone_id?: string;
   sprint_id?: string;
+  recurrence_parent_id?: string | null;
   title: string;
   description?: string;
   status: TaskStatus;
@@ -91,6 +93,8 @@ export interface Task {
   due_date?: string;
   started_at?: string;
   estimate?: number;
+  recurrence_rule?: RecurrenceRule | null;
+  recurrence_ends_at?: string | null;
   assignees: User[];
   creator?: User;
   labels: Label[];
@@ -100,6 +104,20 @@ export interface Task {
   children?: Task[];
   milestone?: Milestone;
   sprint?: Sprint;
+}
+
+export interface TaskFilters {
+  label_ids?: string[];
+  assignee_ids?: string[];
+  milestone_id?: string;
+  due_date_from?: string;
+  due_date_to?: string;
+  status?: string;
+  has_subtasks?: boolean;
+  is_overdue?: boolean;
+  watcher_id?: string;
+  sort_by?: 'due_date' | 'created_at' | 'title' | 'estimate';
+  sort_dir?: 'asc' | 'desc';
 }
 
 export interface Notification {

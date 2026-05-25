@@ -10,6 +10,7 @@ import type {
   Milestone,
   Sprint,
   WorkspaceMember,
+  RecurrenceRule,
 } from '@/types';
 
 interface Props {
@@ -107,6 +108,11 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
+  // Recurrence
+  const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule | ''>('');
+  const [recurrenceEndsAt, setRecurrenceEndsAt] = useState('');
+  const [savingRecurrence, setSavingRecurrence] = useState(false);
+
   // Pickers
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
@@ -128,6 +134,10 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
           sprint_id: t.sprint_id ?? '',
         });
         setIsWatching(!!t.watchers?.some((w) => w.id === user?.id));
+        setRecurrenceRule((t.recurrence_rule as RecurrenceRule) ?? '');
+        setRecurrenceEndsAt(
+          t.recurrence_ends_at ? t.recurrence_ends_at.substring(0, 10) : '',
+        );
       });
   }, [taskId, workspaceId, projectId, user?.id]);
 
@@ -181,6 +191,19 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
     }
     fetchTask();
     onUpdate();
+  };
+
+  const saveRecurrence = async () => {
+    setSavingRecurrence(true);
+    try {
+      await api.patch(`/tasks/${taskId}/recurrence`, {
+        recurrence_rule: recurrenceRule || null,
+        recurrence_ends_at: recurrenceRule ? (recurrenceEndsAt || null) : null,
+      });
+      fetchTask();
+    } finally {
+      setSavingRecurrence(false);
+    }
   };
 
   const toggleWatch = async () => {
@@ -705,6 +728,51 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                 </select>
               ) : (
                 <p className="text-sm text-gray-700">{task.sprint?.name ?? 'Backlog'}</p>
+              )}
+            </div>
+
+            {/* Recurrence */}
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-medium mb-1.5">Recurrence</p>
+              <select
+                value={recurrenceRule}
+                onChange={(e) => setRecurrenceRule(e.target.value as RecurrenceRule | '')}
+                title="Recurrence rule"
+                className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white mb-2"
+              >
+                <option value="">None</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="weekday">Every Weekday</option>
+                <option value="monthly">Monthly</option>
+              </select>
+
+              {recurrenceRule && (
+                <div className="mb-2">
+                  <p className="text-xs text-gray-400 mb-1">Ends on (optional)</p>
+                  <input
+                    type="date"
+                    value={recurrenceEndsAt}
+                    onChange={(e) => setRecurrenceEndsAt(e.target.value)}
+                    title="Recurrence end date"
+                    className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={saveRecurrence}
+                disabled={savingRecurrence}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+              >
+                {savingRecurrence ? 'Saving…' : 'Save recurrence'}
+              </button>
+
+              {task.recurrence_parent_id && (
+                <p className="text-xs text-gray-400 mt-1.5">
+                  🔁 Instance of a recurring task
+                </p>
               )}
             </div>
 

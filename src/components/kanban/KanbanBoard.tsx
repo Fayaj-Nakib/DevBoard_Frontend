@@ -45,6 +45,8 @@ interface Props {
   tasks: Record<string, Task[]>;
   onReorder: (items: ReorderItem[]) => Promise<void>;
   onTaskClick: (task: Task) => void;
+  selectedIds?: Set<string>;
+  onSelectTask?: (taskId: string) => void;
 }
 
 function Avatar({ name }: { name: string }) {
@@ -58,7 +60,12 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
-function TaskCard({ task, onClick, isDragging }: { task: Task; onClick: () => void; isDragging: boolean }) {
+function TaskCard({
+  task, onClick, isDragging, selected, onSelect,
+}: {
+  task: Task; onClick: () => void; isDragging: boolean;
+  selected?: boolean; onSelect?: (id: string) => void;
+}) {
   const subtasks = task.children ?? [];
   const doneSubs = subtasks.filter((s) => s.status === 'done').length;
   const hasSubs = subtasks.length > 0;
@@ -68,10 +75,31 @@ function TaskCard({ task, onClick, isDragging }: { task: Task; onClick: () => vo
   return (
     <div
       onClick={onClick}
-      className={`bg-white border rounded-xl p-3 text-sm cursor-pointer select-none transition-all ${
-        isDragging ? 'shadow-xl rotate-1 opacity-95 ring-2 ring-blue-300' : 'shadow-sm hover:shadow-md hover:border-blue-200'
+      className={`group bg-white border rounded-xl p-3 text-sm cursor-pointer select-none transition-all ${
+        selected
+          ? 'ring-2 ring-blue-400 border-blue-300'
+          : isDragging
+          ? 'shadow-xl rotate-1 opacity-95 ring-2 ring-blue-300'
+          : 'shadow-sm hover:shadow-md hover:border-blue-200'
       }`}
     >
+      {/* Checkbox — visible on hover or when selected */}
+      {onSelect && (
+        <div className="flex items-start gap-2 mb-1">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSelect(task.id); }}
+            className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors mt-0.5
+              ${selected
+                ? 'bg-blue-600 border-blue-600 text-white'
+                : 'border-gray-300 opacity-0 group-hover:opacity-100'
+              }`}
+            aria-label={selected ? 'Deselect task' : 'Select task'}
+          >
+            {selected && <span className="text-[10px] leading-none">✓</span>}
+          </button>
+        </div>
+      )}
       {/* Priority dot + title */}
       <div className="flex items-start gap-2 mb-2">
         <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${PRIORITY_DOT[task.priority] ?? 'bg-gray-300'}`} />
@@ -141,15 +169,22 @@ function TaskCard({ task, onClick, isDragging }: { task: Task; onClick: () => vo
         </div>
       </div>
 
-      {/* Attachment indicator */}
-      {task.attachments && task.attachments.length > 0 && (
-        <p className="text-xs text-gray-400 mt-1.5">📎 {task.attachments.length} attachment{task.attachments.length > 1 ? 's' : ''}</p>
+      {/* Bottom indicators */}
+      {(task.recurrence_rule || (task.attachments && task.attachments.length > 0)) && (
+        <div className="flex items-center gap-2 mt-1.5">
+          {task.recurrence_rule && (
+            <span className="text-xs text-gray-400" title={`Repeats ${task.recurrence_rule}`}>🔁</span>
+          )}
+          {task.attachments && task.attachments.length > 0 && (
+            <span className="text-xs text-gray-400">📎 {task.attachments.length}</span>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-export default function KanbanBoard({ tasks, onReorder, onTaskClick }: Props) {
+export default function KanbanBoard({ tasks, onReorder, onTaskClick, selectedIds, onSelectTask }: Props) {
   const [localTasks, setLocalTasks] = useState<Record<string, Task[]>>(tasks);
 
   useEffect(() => {
@@ -214,6 +249,8 @@ export default function KanbanBoard({ tasks, onReorder, onTaskClick }: Props) {
                             task={task}
                             onClick={() => onTaskClick(task)}
                             isDragging={snapshot.isDragging}
+                            selected={selectedIds?.has(task.id)}
+                            onSelect={onSelectTask}
                           />
                         </div>
                       )}
