@@ -498,6 +498,7 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                       type="file"
                       ref={fileInputRef}
                       onChange={uploadFile}
+                      aria-label="Upload file attachment"
                       className="hidden"
                     />
                     <button
