@@ -18,8 +18,8 @@ export default function WorkspaceSettingsPage() {
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const initialTab = searchParams.get('tab');
-  const [tab, setTab] = useState<'webhooks' | 'profile' | 'security'>(
-    initialTab === 'security' ? 'security' : initialTab === 'profile' ? 'profile' : 'webhooks'
+  const [tab, setTab] = useState<'webhooks' | 'profile' | 'security' | 'members'>(
+    initialTab === 'security' ? 'security' : initialTab === 'profile' ? 'profile' : initialTab === 'members' ? 'members' : 'webhooks'
   );
 
   return (
@@ -64,6 +64,15 @@ export default function WorkspaceSettingsPage() {
           </button>
           <button
             type="button"
+            onClick={() => setTab('members')}
+            className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
+              tab === 'members' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Members
+          </button>
+          <button
+            type="button"
             onClick={() => setTab('security')}
             className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
               tab === 'security' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
@@ -75,6 +84,7 @@ export default function WorkspaceSettingsPage() {
 
         {tab === 'webhooks' && <WebhookManager workspaceId={workspaceId} />}
         {tab === 'profile'  && <UserDigestSettings />}
+        {tab === 'members'  && <WorkspaceMembersManager workspaceId={workspaceId} />}
         {tab === 'security' && <SecurityTab workspaceId={workspaceId} />}
       </div>
     </div>
@@ -396,6 +406,141 @@ function UserDigestSettings() {
           </button>
           {saved && <span className="text-xs text-green-600">Saved!</span>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Workspace Members Manager ─────────────────────────────────────────────────
+
+type WsRole = 'owner' | 'admin' | 'member' | 'guest';
+
+interface WsMember {
+  id: string;
+  name: string;
+  email: string;
+  role: WsRole;
+}
+
+const ROLE_BADGE: Record<WsRole, string> = {
+  owner:  'bg-purple-50 text-purple-700',
+  admin:  'bg-blue-50 text-blue-700',
+  member: 'bg-gray-100 text-gray-600',
+  guest:  'bg-amber-50 text-amber-700',
+};
+
+function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
+  const { user } = useAuth();
+  const [members, setMembers] = useState<WsMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [myRole, setMyRole] = useState<WsRole | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'guest'>('member');
+  const [inviting, setInviting] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchMembers = useCallback(() => {
+    api.get<WsMember[]>(`/workspaces/${workspaceId}/members`)
+      .then((r) => {
+        setMembers(r.data);
+        const me = r.data.find((m) => m.id === user?.id);
+        setMyRole(me?.role ?? null);
+      })
+      .finally(() => setLoading(false));
+  }, [workspaceId, user?.id]);
+
+  useEffect(() => { fetchMembers(); }, [fetchMembers]);
+
+  const invite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setError('');
+    try {
+      await api.post(`/workspaces/${workspaceId}/members`, { email: inviteEmail.trim(), role: inviteRole });
+      setInviteEmail('');
+      fetchMembers();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? 'Failed to invite member.');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const remove = async (memberId: string) => {
+    if (!confirm('Remove this member from the workspace?')) return;
+    await api.delete(`/workspaces/${workspaceId}/members/${memberId}`);
+    fetchMembers();
+  };
+
+  const canManage = myRole === 'owner' || myRole === 'admin';
+
+  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-gray-800 mb-1">Workspace Members</h2>
+        <p className="text-xs text-gray-500">Guests can only view projects they are explicitly added to.</p>
+      </div>
+
+      {canManage && (
+        <div className="bg-white border rounded-xl p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700">Invite member</h3>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && invite()}
+              placeholder="Email address"
+              className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <select
+              title="Role"
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member' | 'guest')}
+              className="border rounded-lg px-2 py-1.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="admin">Admin</option>
+              <option value="member">Member</option>
+              <option value="guest">Guest</option>
+            </select>
+            <button
+              type="button"
+              onClick={invite}
+              disabled={inviting || !inviteEmail.trim()}
+              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {inviting ? 'Inviting…' : 'Invite'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">Guest — read-only access to projects they are added to. Member — full access. Admin — manage workspace.</p>
+        </div>
+      )}
+
+      <div className="bg-white border rounded-xl divide-y overflow-hidden">
+        {members.map((m) => (
+          <div key={m.id} className="px-4 py-3 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800">{m.name}</p>
+              <p className="text-xs text-gray-400">{m.email}</p>
+            </div>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${ROLE_BADGE[m.role]}`}>
+              {m.role}
+            </span>
+            {canManage && m.role !== 'owner' && m.id !== user?.id && (
+              <button
+                type="button"
+                onClick={() => remove(m.id)}
+                className="text-xs text-red-400 hover:text-red-600 flex-shrink-0"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

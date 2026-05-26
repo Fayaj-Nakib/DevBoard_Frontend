@@ -5,7 +5,7 @@ export interface User {
 }
 
 export interface WorkspaceMember extends User {
-  role: 'owner' | 'admin' | 'member';
+  role: 'owner' | 'admin' | 'member' | 'guest';
 }
 
 export interface Workspace {
