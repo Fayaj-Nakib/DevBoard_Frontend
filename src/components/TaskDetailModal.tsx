@@ -1214,6 +1214,11 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
 
             <hr className="border-gray-200" />
 
+            {/* GitHub */}
+            <GitHubTaskSection taskId={task.id} task={task} onUpdated={(gh: Partial<Pick<Task, 'github_issue_number' | 'github_pr_number' | 'github_pr_state'>>) => setTask((t) => t ? { ...t, ...gh } : t)} />
+
+            <hr className="border-gray-200" />
+
             {/* Creator */}
             <div>
               <p className="text-xs text-gray-400 uppercase font-medium mb-1.5">Created by</p>
@@ -1222,6 +1227,139 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── GitHub Task Section ───────────────────────────────────────────────────────
+
+type GhFields = Pick<Task, 'github_issue_number' | 'github_pr_number' | 'github_pr_state'>;
+
+function GitHubTaskSection({
+  taskId,
+  task,
+  onUpdated,
+}: {
+  taskId: string;
+  task: Task;
+  onUpdated: (gh: Partial<GhFields>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [issueNum, setIssueNum] = useState(String(task.github_issue_number ?? ''));
+  const [prNum, setPrNum] = useState(String(task.github_pr_number ?? ''));
+  const [prState, setPrState] = useState<string>(task.github_pr_state ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const hasAny = task.github_issue_number || task.github_pr_number;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { data } = await api.patch<GhFields>(`/tasks/${taskId}/github`, {
+        github_issue_number: issueNum ? parseInt(issueNum) : null,
+        github_pr_number: prNum ? parseInt(prNum) : null,
+        github_pr_state: prState || null,
+      });
+      onUpdated(data);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const PR_STATE_BADGE: Record<string, string> = {
+    open:   'bg-green-100 text-green-700',
+    closed: 'bg-red-100 text-red-600',
+    merged: 'bg-purple-100 text-purple-700',
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-gray-400 uppercase font-medium">GitHub</p>
+        <button
+          type="button"
+          onClick={() => { setEditing((e) => !e); setIssueNum(String(task.github_issue_number ?? '')); setPrNum(String(task.github_pr_number ?? '')); setPrState(task.github_pr_state ?? ''); }}
+          className="text-xs text-gray-400 hover:text-blue-600"
+        >
+          {editing ? 'Cancel' : 'Edit'}
+        </button>
+      </div>
+
+      {editing ? (
+        <div className="space-y-2">
+          <div>
+            <label className="text-xs text-gray-500 block mb-0.5">Issue #</label>
+            <input
+              type="number"
+              title="GitHub issue number"
+              min="1"
+              value={issueNum}
+              onChange={(e) => setIssueNum(e.target.value)}
+              placeholder="e.g. 42"
+              className="w-full border rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-0.5">PR #</label>
+            <input
+              type="number"
+              title="GitHub PR number"
+              min="1"
+              value={prNum}
+              onChange={(e) => setPrNum(e.target.value)}
+              placeholder="e.g. 57"
+              className="w-full border rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {prNum && (
+            <div>
+              <label className="text-xs text-gray-500 block mb-0.5">PR state</label>
+              <select
+                title="PR state"
+                value={prState}
+                onChange={(e) => setPrState(e.target.value)}
+                className="w-full border rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">—</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+                <option value="merged">Merged</option>
+              </select>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="text-xs bg-gray-900 text-white px-3 py-1 rounded-lg hover:bg-black disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      ) : hasAny ? (
+        <div className="space-y-1">
+          {task.github_issue_number && (
+            <p className="text-xs text-gray-600">
+              Issue: <span className="font-mono">#{task.github_issue_number}</span>
+            </p>
+          )}
+          {task.github_pr_number && (
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-600">
+                PR: <span className="font-mono">#{task.github_pr_number}</span>
+              </p>
+              {task.github_pr_state && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${PR_STATE_BADGE[task.github_pr_state] ?? 'bg-gray-100 text-gray-600'}`}>
+                  {task.github_pr_state}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400 italic">No GitHub link</p>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import type { Webhook, WebhookEvent, WebhookDelivery, TwoFactorStatus } from '@/types';
+import type { Webhook, WebhookEvent, WebhookDelivery, TwoFactorStatus, GitHubConnection } from '@/types';
 
 const ALL_EVENTS: WebhookEvent[] = [
   'task.created', 'task.updated', 'task.deleted',
@@ -18,8 +18,12 @@ export default function WorkspaceSettingsPage() {
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const initialTab = searchParams.get('tab');
-  const [tab, setTab] = useState<'webhooks' | 'profile' | 'security' | 'members'>(
-    initialTab === 'security' ? 'security' : initialTab === 'profile' ? 'profile' : initialTab === 'members' ? 'members' : 'webhooks'
+  const [tab, setTab] = useState<'webhooks' | 'profile' | 'security' | 'members' | 'github'>(
+    initialTab === 'security' ? 'security'
+    : initialTab === 'profile' ? 'profile'
+    : initialTab === 'members' ? 'members'
+    : initialTab === 'github' ? 'github'
+    : 'webhooks'
   );
 
   return (
@@ -80,12 +84,22 @@ export default function WorkspaceSettingsPage() {
           >
             Security
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('github')}
+            className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
+              tab === 'github' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            GitHub
+          </button>
         </div>
 
         {tab === 'webhooks' && <WebhookManager workspaceId={workspaceId} />}
         {tab === 'profile'  && <UserDigestSettings />}
         {tab === 'members'  && <WorkspaceMembersManager workspaceId={workspaceId} />}
         {tab === 'security' && <SecurityTab workspaceId={workspaceId} />}
+        {tab === 'github'   && <GitHubSettings workspaceId={workspaceId} />}
       </div>
     </div>
   );
@@ -803,6 +817,150 @@ function TwoFactorSettings() {
               <button type="button" onClick={disable} disabled={saving || disableCode.length !== 6} className="text-sm bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 disabled:opacity-50">
                 {saving ? 'Disabling…' : 'Disable'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── GitHub Settings ───────────────────────────────────────────────────────────
+
+function GitHubSettings({ workspaceId }: { workspaceId: string }) {
+  const [conn, setConn] = useState<GitHubConnection | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const fetchStatus = useCallback(() => {
+    api.get<GitHubConnection>(`/workspaces/${workspaceId}/github`)
+      .then((r) => setConn(r.data))
+      .finally(() => setLoading(false));
+  }, [workspaceId]);
+
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+
+  const connect = async () => {
+    if (!token.trim()) return;
+    setConnecting(true);
+    setError('');
+    try {
+      const { data } = await api.post<GitHubConnection>(`/workspaces/${workspaceId}/github`, { token: token.trim() });
+      setConn(data);
+      setToken('');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? 'Failed to connect to GitHub.');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const disconnect = async () => {
+    if (!confirm('Disconnect GitHub? Project links and issue numbers will be preserved but no longer synced.')) return;
+    await api.delete(`/workspaces/${workspaceId}/github`);
+    setConn({ connected: false });
+  };
+
+  const copySecret = (val: string) => {
+    navigator.clipboard.writeText(val).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-gray-800 mb-1">GitHub Integration</h2>
+        <p className="text-xs text-gray-500">Connect a GitHub Personal Access Token to link repositories, issues, and pull requests.</p>
+      </div>
+
+      {/* Connection status */}
+      <div className="bg-white border rounded-xl p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${conn?.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-800">
+              {conn?.connected ? `Connected as @${conn.github_username}` : 'Not connected'}
+            </p>
+            <p className="text-xs text-gray-400">
+              {conn?.connected ? 'GitHub API access is active for this workspace.' : 'Enter a Personal Access Token with repo scope.'}
+            </p>
+          </div>
+          {conn?.connected && (
+            <button
+              type="button"
+              onClick={disconnect}
+              className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded px-2 py-1"
+            >
+              Disconnect
+            </button>
+          )}
+        </div>
+
+        {!conn?.connected && (
+          <div className="space-y-2">
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && connect()}
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              />
+              <button
+                type="button"
+                onClick={connect}
+                disabled={connecting || !token.trim()}
+                className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-lg hover:bg-black disabled:opacity-50"
+              >
+                {connecting ? 'Connecting…' : 'Connect'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400">
+              Create a token at <span className="font-mono">github.com/settings/tokens</span> with <span className="font-mono">repo</span> scope.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Webhook setup */}
+      {conn?.connected && conn.webhook_url && (
+        <div className="bg-white border rounded-xl p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700">Webhook Setup</h3>
+          <p className="text-xs text-gray-500">
+            Add this webhook to your GitHub repositories to auto-update tasks when issues or PRs change.
+          </p>
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">Payload URL</label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs bg-gray-100 px-3 py-2 rounded-lg font-mono text-gray-700 truncate">{conn.webhook_url}</code>
+                <button
+                  type="button"
+                  onClick={() => copySecret(conn.webhook_url!)}
+                  className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0 border rounded px-2 py-1"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">Secret</label>
+              <code className="block text-xs bg-gray-100 px-3 py-2 rounded-lg font-mono text-gray-700">{conn.webhook_secret}</code>
+            </div>
+            <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700 space-y-1">
+              <p className="font-medium">GitHub webhook events to subscribe:</p>
+              <p><span className="font-mono">Issues</span> — closes linked tasks when an issue is closed</p>
+              <p><span className="font-mono">Pull requests</span> — updates PR state on linked tasks</p>
             </div>
           </div>
         </div>

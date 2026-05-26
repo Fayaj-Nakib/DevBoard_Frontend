@@ -22,6 +22,7 @@ export interface Project {
   description?: string;
   status: 'active' | 'archived';
   tasks_count?: number;
+  github_repo?: string | null;
 }
 
 export interface Label {
@@ -132,6 +133,9 @@ export interface Task {
   sprint?: Sprint;
   project_status?: ProjectStatus;
   custom_field_values?: CustomFieldValue[];
+  github_issue_number?: number | null;
+  github_pr_number?: number | null;
+  github_pr_state?: 'open' | 'closed' | 'merged' | null;
 }
 
 export interface TaskFilters {
@@ -418,4 +422,20 @@ export interface ImportJob {
 export interface TwoFactorStatus {
   enabled: boolean;
   confirmed: boolean;
+}
+
+// ── GitHub integration ────────────────────────────────────────────────────────
+export interface GitHubConnection {
+  connected: boolean;
+  github_username?: string;
+  webhook_url?: string;
+  webhook_secret?: string;
+}
+
+export interface GitHubIssue {
+  number: number;
+  title: string;
+  state: string;
+  url: string;
+  labels: { name: string; color: string }[];
 }

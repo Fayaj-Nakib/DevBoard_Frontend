@@ -6,10 +6,10 @@ import api from '@/lib/api';
 import type {
   ProjectStatus, TaskTemplate, AutomationRule, AutomationTriggerType, AutomationActionType,
   ProjectMember, ProjectRole, WorkspaceMember, CustomFieldDefinition, CustomFieldType,
-  ImportJob,
+  ImportJob, GitHubConnection, GitHubIssue,
 } from '@/types';
 
-type Tab = 'statuses' | 'templates' | 'automation' | 'members' | 'custom-fields' | 'export';
+type Tab = 'statuses' | 'templates' | 'automation' | 'members' | 'custom-fields' | 'export' | 'github';
 
 export default function ProjectSettingsPage() {
   const { workspaceId, projectId } = useParams<{ workspaceId: string; projectId: string }>();
@@ -23,6 +23,7 @@ export default function ProjectSettingsPage() {
     { key: 'members', label: 'Members' },
     { key: 'custom-fields', label: 'Custom Fields' },
     { key: 'export', label: 'Export / Import' },
+    { key: 'github', label: 'GitHub' },
   ];
 
   return (
@@ -61,6 +62,7 @@ export default function ProjectSettingsPage() {
         {tab === 'members'       && <MembersManager workspaceId={workspaceId} projectId={projectId} />}
         {tab === 'custom-fields' && <CustomFieldsManager workspaceId={workspaceId} projectId={projectId} />}
         {tab === 'export'        && <ExportImportManager workspaceId={workspaceId} projectId={projectId} />}
+        {tab === 'github'        && <GitHubProjectSettings workspaceId={workspaceId} projectId={projectId} />}
       </div>
     </div>
   );
@@ -780,6 +782,164 @@ function ExportImportManager({ workspaceId, projectId }: { workspaceId: string; 
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── GitHub Project Settings ───────────────────────────────────────────────────
+
+function GitHubProjectSettings({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const [wsConn, setWsConn] = useState<GitHubConnection | null>(null);
+  const [repo, setRepo] = useState('');
+  const [currentRepo, setCurrentRepo] = useState<string | null>(null);
+  const [issues, setIssues] = useState<GitHubIssue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadingIssues, setLoadingIssues] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    Promise.all([
+      api.get<GitHubConnection>(`/workspaces/${workspaceId}/github`),
+      api.get<{ github_repo: string | null }>(`/workspaces/${workspaceId}/projects/${projectId}`),
+    ]).then(([conn, proj]) => {
+      setWsConn(conn.data);
+      const r = proj.data.github_repo ?? null;
+      setCurrentRepo(r);
+      setRepo(r ?? '');
+    }).finally(() => setLoading(false));
+  }, [workspaceId, projectId]);
+
+  const saveRepo = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const { data } = await api.patch<{ github_repo: string | null }>(
+        `/workspaces/${workspaceId}/projects/${projectId}/github/repo`,
+        { github_repo: repo.trim() || null }
+      );
+      setCurrentRepo(data.github_repo ?? null);
+      setRepo(data.github_repo ?? '');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? 'Failed to link repository.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fetchIssues = async () => {
+    if (!currentRepo) return;
+    setLoadingIssues(true);
+    try {
+      const { data } = await api.get<GitHubIssue[]>(
+        `/workspaces/${workspaceId}/projects/${projectId}/github/issues`
+      );
+      setIssues(data);
+    } finally {
+      setLoadingIssues(false);
+    }
+  };
+
+  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+
+  if (!wsConn?.connected) {
+    return (
+      <div className="bg-white border rounded-xl p-6 text-center space-y-2">
+        <p className="text-sm font-medium text-gray-700">GitHub is not connected for this workspace.</p>
+        <p className="text-xs text-gray-400">Go to Workspace Settings → GitHub to connect a Personal Access Token first.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-gray-800 mb-1">GitHub Repository</h2>
+        <p className="text-xs text-gray-500">Link this project to a GitHub repository to browse issues and link them to tasks.</p>
+      </div>
+
+      {/* Repo link */}
+      <div className="bg-white border rounded-xl p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          {currentRepo ? (
+            <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-medium">Linked: {currentRepo}</span>
+          ) : (
+            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">No repository linked</span>
+          )}
+        </div>
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={repo}
+            onChange={(e) => setRepo(e.target.value)}
+            placeholder="owner/repository"
+            className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+          />
+          <button
+            type="button"
+            onClick={saveRepo}
+            disabled={saving}
+            className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-lg hover:bg-black disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : repo.trim() ? 'Link Repo' : 'Unlink'}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400">Format: <span className="font-mono">owner/repo</span> — leave blank to unlink.</p>
+      </div>
+
+      {/* Open issues browser */}
+      {currentRepo && (
+        <div className="bg-white border rounded-xl p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Open Issues</h3>
+            <button
+              type="button"
+              onClick={fetchIssues}
+              disabled={loadingIssues}
+              className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+            >
+              {loadingIssues ? 'Loading…' : issues.length > 0 ? 'Refresh' : 'Load Issues'}
+            </button>
+          </div>
+
+          {issues.length === 0 && !loadingIssues && (
+            <p className="text-xs text-gray-400 text-center py-2">Click "Load Issues" to fetch open issues from GitHub.</p>
+          )}
+
+          <div className="space-y-1.5 max-h-80 overflow-y-auto">
+            {issues.map((issue) => (
+              <div key={issue.number} className="flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
+                <span className="text-xs text-gray-400 font-mono mt-0.5 flex-shrink-0">#{issue.number}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-700 truncate">{issue.title}</p>
+                  {issue.labels.length > 0 && (
+                    <div className="flex gap-1 mt-0.5 flex-wrap">
+                      {issue.labels.map((l) => (
+                        <span
+                          key={l.name}
+                          className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600"
+                        >
+                          {l.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <a
+                  href={issue.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-gray-400 hover:text-blue-600 flex-shrink-0"
+                >
+                  ↗
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
