@@ -23,13 +23,13 @@ import type { Task, TaskFilters } from '@/types';
 
 type ViewTab = 'board' | 'backlog' | 'timeline' | 'calendar' | 'workload' | 'analytics';
 
-const TABS: { id: ViewTab; label: string }[] = [
-  { id: 'board',     label: 'Board' },
-  { id: 'backlog',   label: 'Backlog' },
-  { id: 'timeline',  label: 'Timeline' },
-  { id: 'calendar',  label: 'Calendar' },
-  { id: 'workload',  label: 'Workload' },
-  { id: 'analytics', label: 'Analytics' },
+const TABS: { id: ViewTab; label: string; icon: string }[] = [
+  { id: 'board',     label: 'Board',     icon: '▦' },
+  { id: 'backlog',   label: 'Backlog',   icon: '☰' },
+  { id: 'timeline',  label: 'Timeline',  icon: '⟶' },
+  { id: 'calendar',  label: 'Calendar',  icon: '◫' },
+  { id: 'workload',  label: 'Workload',  icon: '◎' },
+  { id: 'analytics', label: 'Analytics', icon: '↗' },
 ];
 
 export default function ProjectPage() {
@@ -41,13 +41,9 @@ export default function ProjectPage() {
   const [activeTab, setActiveTab] = useState<ViewTab>('board');
   const [createWithDate, setCreateWithDate] = useState<string | undefined>();
 
-  // ── Real-time (Reverb) ────────────────────────────────────────────────────
   const { echo, connected } = useEcho();
-
-  // ── Project statuses (for dynamic board columns) ──────────────────────────
   const { statuses } = useProjectStatuses(workspaceId, projectId);
 
-  // ── Derive filters from URL params ───────────────────────────────────────
   const filters = useMemo<TaskFilters>(() => ({
     label_ids:      searchParams.getAll('label_ids[]').length ? searchParams.getAll('label_ids[]') : undefined,
     assignee_ids:   searchParams.getAll('assignee_ids[]').length ? searchParams.getAll('assignee_ids[]') : undefined,
@@ -79,16 +75,14 @@ export default function ProjectPage() {
     router.push(qs ? `?${qs}` : '?', { scroll: false });
   }, [router]);
 
-  // ── Tasks ─────────────────────────────────────────────────────────────────
   const { tasks, loading, reorder, refresh } = useTasks(workspaceId, projectId, filters, echo);
 
-  // ── Modal state ───────────────────────────────────────────────────────────
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showSprints, setShowSprints] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [createStatusId, setCreateStatusId] = useState<string | undefined>();
 
-  // Cmd+K / Ctrl+K → open command palette
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -100,7 +94,6 @@ export default function ProjectPage() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // ── Bulk selection ────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const toggleSelectTask = useCallback((taskId: string) => {
@@ -115,15 +108,16 @@ export default function ProjectPage() {
 
   const handleReorder = (items: ReorderItem[]) => reorder(items);
   const handleTaskClick = (task: Task) => {
-    if (selectedIds.size > 0) {
-      toggleSelectTask(task.id);
-      return;
-    }
+    if (selectedIds.size > 0) { toggleSelectTask(task.id); return; }
     setSelectedTaskId(task.id);
   };
   const handleTaskIdClick = (taskId: string) => setSelectedTaskId(taskId);
 
-  // Done-task count from statuses that are is_done, or fall back to 'done' key
+  const handleAddTask = (statusId: string) => {
+    setCreateStatusId(statusId);
+    setShowCreate(true);
+  };
+
   const doneTasks = useMemo(() => {
     if (statuses.length > 0) {
       return statuses
@@ -134,6 +128,7 @@ export default function ProjectPage() {
   }, [statuses, tasks]);
 
   const totalTasks = Object.values(tasks).reduce((sum, col) => sum + col.length, 0);
+  const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   const handleCalendarCreateDate = (date: string) => {
     setCreateWithDate(date);
@@ -141,115 +136,164 @@ export default function ProjectPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Nav */}
-      <nav className="bg-white border-b px-6 py-3.5 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => router.push(`/workspaces/${workspaceId}/projects`)}
-            className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1 flex-shrink-0"
-          >
-            ← Projects
-          </button>
-          <span className="text-gray-200 text-lg flex-shrink-0">/</span>
+    <div className="min-h-screen bg-[#F4F5F7] flex flex-col">
+      {/* Top nav bar */}
+      <header className="bg-white border-b border-[#DFE1E6] sticky top-0 z-20">
+        {/* Breadcrumb + actions row */}
+        <div className="px-6 h-14 flex items-center justify-between gap-4">
+          {/* Left: breadcrumb */}
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => router.push(`/workspaces/${workspaceId}/projects`)}
+              className="flex items-center gap-1.5 text-[#626F86] hover:text-[#0052CC] text-sm font-medium transition-colors flex-shrink-0"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+              Projects
+            </button>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DFE1E6" strokeWidth="2" className="flex-shrink-0">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+            <span className="text-sm font-semibold text-[#172B4D] truncate">Board</span>
+          </div>
 
-          {/* View tabs */}
-          <div className="flex items-center gap-1">
-            {TABS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveTab(id)}
-                className={`text-sm px-3 py-1 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                  activeTab === id ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          {/* Right: actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {connected && (
+              <span className="hidden md:flex items-center gap-1.5 text-xs text-[#57D9A3] font-medium bg-[#E3FCEF] px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#57D9A3] animate-pulse" />
+                Live
+              </span>
+            )}
+
+            {totalTasks > 0 && activeTab === 'board' && (
+              <div className="hidden md:flex items-center gap-1.5 text-xs bg-[#F4F5F7] rounded-full px-3 py-1.5 border border-[#DFE1E6]">
+                <span className="font-bold text-[#36B37E]">{progressPct}%</span>
+                <span className="text-[#DFE1E6]">|</span>
+                <span className="text-[#626F86]">{doneTasks}/{totalTasks} done</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowSprints(true)}
+              className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-[#626F86] border border-[#DFE1E6] rounded px-2.5 py-1.5 hover:bg-[#F4F5F7] transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              Sprints
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push(`/workspaces/${workspaceId}/labels`)}
+              className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-[#626F86] border border-[#DFE1E6] rounded px-2.5 py-1.5 hover:bg-[#F4F5F7] transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                <line x1="7" y1="7" x2="7.01" y2="7"/>
+              </svg>
+              Labels
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push(`/workspaces/${workspaceId}/projects/${projectId}/settings`)}
+              className="flex items-center justify-center w-8 h-8 text-[#626F86] border border-[#DFE1E6] rounded hover:bg-[#F4F5F7] transition-colors"
+              title="Project settings"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowPalette(true)}
+              title="Search (Ctrl+K)"
+              className="flex items-center gap-1.5 text-xs font-medium text-[#626F86] border border-[#DFE1E6] rounded px-2.5 py-1.5 hover:bg-[#F4F5F7] transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <span className="hidden sm:inline text-[#B3BAC5] text-[11px]">⌘K</span>
+            </button>
+
+            <div className="w-px h-5 bg-[#DFE1E6]" />
+
+            <NotificationsBell />
+
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-[#0052CC] text-white text-[11px] flex items-center justify-center font-bold flex-shrink-0">
+                {user?.name?.[0]?.toUpperCase() ?? '?'}
+              </div>
+              <span className="text-sm text-[#172B4D] font-medium hidden lg:block">{user?.name}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="text-xs text-[#626F86] hover:text-red-500 transition-colors font-medium"
+            >
+              Sign out
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {connected && (
-            <span className="hidden sm:flex items-center gap-1 text-xs text-green-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              Live
-            </span>
-          )}
-          {totalTasks > 0 && activeTab === 'board' && (
-            <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1">
-              <span className="text-green-600 font-semibold">{doneTasks}</span>
-              <span>/ {totalTasks} done</span>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setShowSprints(true)}
-            className="text-sm text-gray-600 border rounded-lg px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1.5"
-          >
-            <span>⚡</span> Sprints
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push(`/workspaces/${workspaceId}/labels`)}
-            className="text-sm text-gray-600 border rounded-lg px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1.5"
-          >
-            <span>🏷</span> Labels
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push(`/workspaces/${workspaceId}/projects/${projectId}/settings`)}
-            className="text-sm text-gray-600 border rounded-lg px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1.5"
-            title="Project settings"
-          >
-            ⚙️
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowPalette(true)}
-            title="Search (Ctrl+K)"
-            className="text-sm text-gray-500 border rounded-lg px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1.5"
-          >
-            <span>⌕</span>
-            <span className="hidden sm:inline text-xs text-gray-400">Ctrl+K</span>
-          </button>
-
-          <NotificationsBell />
-          <span className="text-sm text-gray-500 hidden sm:block">{user?.name}</span>
-          <button type="button" onClick={logout} className="text-sm text-red-400 hover:text-red-600">
-            Logout
-          </button>
+        {/* Tab bar */}
+        <div className="px-6 flex items-center gap-0 border-t border-[#DFE1E6]">
+          {TABS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap
+                ${activeTab === id
+                  ? 'text-[#0052CC] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#0052CC]'
+                  : 'text-[#626F86] hover:text-[#172B4D] hover:bg-[#F4F5F7]'
+                }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      </nav>
+      </header>
 
-      {/* Content */}
-      <div className="flex-1 p-6">
+      {/* Main content */}
+      <main className="flex-1 p-6 min-h-0">
         {activeTab === 'board' && (
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <button
-                type="button"
-                onClick={() => setShowCreate(true)}
-                className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center gap-1.5"
-              >
-                + New Task
-              </button>
-
-              {selectedIds.size > 0 && (
+          <div>
+            {/* Board toolbar */}
+            <div className="flex items-center justify-between mb-4 gap-3">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={clearSelection}
-                  className="text-sm text-gray-500 hover:text-gray-700"
+                  onClick={() => { setCreateStatusId(undefined); setShowCreate(true); }}
+                  className="flex items-center gap-1.5 bg-[#0052CC] hover:bg-[#0747A6] text-white text-sm font-medium px-3.5 py-2 rounded transition-colors"
                 >
-                  Cancel selection ({selectedIds.size})
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  Create task
                 </button>
-              )}
+
+                {selectedIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="text-sm text-[#626F86] hover:text-[#172B4D] flex items-center gap-1 transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                    {selectedIds.size} selected
+                  </button>
+                )}
+              </div>
             </div>
 
             <FilterBar
@@ -260,8 +304,9 @@ export default function ProjectPage() {
             />
 
             {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <p className="text-gray-400 text-sm">Loading tasks…</p>
+              <div className="flex flex-col items-center justify-center h-64 gap-3">
+                <div className="w-8 h-8 border-2 border-[#0052CC] border-t-transparent rounded-full animate-spin" />
+                <p className="text-[#626F86] text-sm">Loading board…</p>
               </div>
             ) : (
               <KanbanBoard
@@ -269,11 +314,12 @@ export default function ProjectPage() {
                 columns={statuses.length > 0 ? statuses : undefined}
                 onReorder={handleReorder}
                 onTaskClick={handleTaskClick}
+                onAddTask={handleAddTask}
                 selectedIds={selectedIds}
                 onSelectTask={toggleSelectTask}
               />
             )}
-          </>
+          </div>
         )}
 
         {activeTab === 'backlog' && (
@@ -318,7 +364,7 @@ export default function ProjectPage() {
             projectId={projectId}
           />
         )}
-      </div>
+      </main>
 
       {selectedTaskId && (
         <TaskDetailModal
@@ -335,7 +381,7 @@ export default function ProjectPage() {
           workspaceId={workspaceId}
           projectId={projectId}
           defaultDueDate={createWithDate}
-          onClose={() => { setShowCreate(false); setCreateWithDate(undefined); }}
+          onClose={() => { setShowCreate(false); setCreateWithDate(undefined); setCreateStatusId(undefined); }}
           onCreate={refresh}
         />
       )}
