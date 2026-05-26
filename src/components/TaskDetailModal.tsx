@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import TimeTracker from '@/components/TimeTracker';
 import type {
   Task,
   Comment,
@@ -11,6 +12,10 @@ import type {
   Sprint,
   WorkspaceMember,
   RecurrenceRule,
+  ActivityEntry,
+  ActivityPage,
+  CustomFieldValue,
+  CustomFieldType,
 } from '@/types';
 
 interface Props {
@@ -59,13 +64,33 @@ function FileIcon({ mime }: { mime?: string }) {
   return <span>📎</span>;
 }
 
+function formatAction(action: string, payload: Record<string, unknown>): string {
+  switch (action) {
+    case 'task_created': return 'created this task';
+    case 'task_updated': {
+      const field = payload.field as string | undefined;
+      if (field === 'status') return `changed status to "${payload.to as string}"`;
+      if (field === 'title') return `renamed this task`;
+      if (field === 'description') return `updated the description`;
+      return `updated ${field ?? 'this task'}`;
+    }
+    case 'task_deleted': return 'deleted this task';
+    case 'assignee_added': return `assigned ${payload.assignee_name as string ?? 'someone'}`;
+    case 'assignee_removed': return `unassigned ${payload.assignee_name as string ?? 'someone'}`;
+    case 'comment_added': return 'posted a comment';
+    case 'attachment_added': return `attached "${payload.file_name as string ?? 'a file'}"`;
+    case 'attachment_deleted': return 'removed an attachment';
+    default: return action.replace(/_/g, ' ');
+  }
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-type ActiveTab = 'subtasks' | 'attachments' | 'dependencies';
+type ActiveTab = 'subtasks' | 'attachments' | 'dependencies' | 'time' | 'activity';
 
 interface DependencyItem {
   id: string;
@@ -130,6 +155,14 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
   // Backlog
   const [togglingBacklog, setTogglingBacklog] = useState(false);
 
+  // Activity
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  // Custom fields
+  const [cfEdits, setCfEdits] = useState<Record<string, string>>({});
+  const [savingCf, setSavingCf] = useState(false);
+
   // Pickers
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
@@ -137,6 +170,13 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
   const fetchDeps = useCallback(() => {
     api.get<{ blocked_by: DependencyItem[]; blocking: DependencyItem[] }>(`/tasks/${taskId}/dependencies`)
       .then((r) => setDeps(r.data));
+  }, [taskId]);
+
+  const fetchActivity = useCallback(() => {
+    setActivityLoading(true);
+    api.get<ActivityPage>(`/tasks/${taskId}/activity`)
+      .then((r) => setActivity(r.data.data))
+      .finally(() => setActivityLoading(false));
   }, [taskId]);
 
   const searchDepCandidates = useCallback((q: string) => {
@@ -210,6 +250,7 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
   useEffect(() => {
     fetchTask();
     fetchDeps();
+    fetchActivity();
     api.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`).then((r) => setMembers(r.data));
     api.get<Label[]>(`/workspaces/${workspaceId}/labels`).then((r) => setAllLabels(r.data));
     api.get<Milestone[]>(`/workspaces/${workspaceId}/projects/${projectId}/milestones`).then((r) => setMilestones(r.data));
@@ -347,6 +388,16 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
     fetchTask();
   };
 
+  const saveCustomFields = async () => {
+    if (Object.keys(cfEdits).length === 0) return;
+    setSavingCf(true);
+    try {
+      await api.put(`/tasks/${taskId}/custom-fields`, { values: cfEdits });
+      setCfEdits({});
+      fetchTask();
+    } finally { setSavingCf(false); }
+  };
+
   const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -368,8 +419,7 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
       onClick={handleBackdrop}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col"
-        style={{ maxHeight: '88vh' }}
+        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[88vh]"
       >
         {/* ── Header ── */}
         <div className="flex items-start gap-4 px-6 py-4 border-b">
@@ -468,6 +518,8 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                   ['subtasks', subtasks.length > 0 ? `Sub-tasks (${doneSubs}/${subtasks.length})` : 'Sub-tasks'],
                   ['attachments', `Attachments${task.attachments?.length ? ` (${task.attachments.length})` : ''}`],
                   ['dependencies', `Dependencies${(deps.blocked_by.length + deps.blocking.length) > 0 ? ` (${deps.blocked_by.length + deps.blocking.length})` : ''}`],
+                  ['time', 'Time'],
+                  ['activity', 'Activity'],
                 ] as [ActiveTab, string][]).map(([tab, label]) => (
                   <button
                     key={tab}
@@ -492,12 +544,10 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                         <span>{doneSubs}/{subtasks.length} done</span>
                         <span>{subtasks.length > 0 ? Math.round((doneSubs / subtasks.length) * 100) : 0}%</span>
                       </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-green-500 rounded-full transition-all"
-                          style={{ width: `${subtasks.length > 0 ? (doneSubs / subtasks.length) * 100 : 0}%` }}
-                        />
-                      </div>
+                      <svg className="w-full" height="6" aria-hidden="true">
+                        <rect x="0" y="0" width="100%" height="6" rx="3" fill="#F3F4F6" />
+                        <rect x="0" y="0" width={`${subtasks.length > 0 ? (doneSubs / subtasks.length) * 100 : 0}%`} height="6" rx="3" fill="#22C55E" />
+                      </svg>
                     </div>
                   )}
 
@@ -685,6 +735,38 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                       {uploading ? 'Uploading…' : '+ Attach a file'}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {activeTab === 'time' && (
+                <TimeTracker taskId={taskId} currentUserId={user?.id ?? ''} />
+              )}
+
+              {activeTab === 'activity' && (
+                <div className="space-y-1">
+                  {activityLoading && (
+                    <p className="text-xs text-gray-400 py-2">Loading activity…</p>
+                  )}
+                  {!activityLoading && activity.length === 0 && (
+                    <p className="text-xs text-gray-400 italic py-2">No activity recorded yet.</p>
+                  )}
+                  {activity.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-2.5 py-2 border-b last:border-0">
+                      <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-xs text-gray-500 font-semibold mt-0.5">
+                        {entry.actor ? entry.actor.name[0].toUpperCase() : '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-700">
+                          <span className="font-medium">{entry.actor?.name ?? 'System'}</span>
+                          {' '}
+                          <span>{formatAction(entry.action, entry.payload)}</span>
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1014,8 +1096,8 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                   {task.labels.map((l) => (
                     <span
                       key={l.id}
-                      style={{ backgroundColor: l.color + '22', color: l.color, borderColor: l.color + '44' }}
-                      className="text-xs px-2 py-0.5 rounded-full border font-medium"
+                      style={{ '--lc': l.color, '--lc-bg': l.color + '22', '--lc-bd': l.color + '44' } as React.CSSProperties}
+                      className="text-xs px-2 py-0.5 rounded-full border font-medium [background-color:var(--lc-bg)] [color:var(--lc)] [border-color:var(--lc-bd)]"
                     >
                       {l.name}
                     </span>
@@ -1040,8 +1122,8 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                           {active && '✓'}
                         </span>
                         <span
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: label.color }}
+                          style={{ '--dot': label.color } as React.CSSProperties}
+                          className="w-3 h-3 rounded-full flex-shrink-0 [background-color:var(--dot)]"
                         />
                         <span className="text-gray-700">{label.name}</span>
                       </button>
@@ -1070,6 +1152,65 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                 <p className="text-xs text-gray-400 mb-1">No watchers</p>
               )}
             </div>
+
+            <hr className="border-gray-200" />
+
+            {/* Custom fields */}
+            {(task.custom_field_values ?? []).length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 uppercase font-medium mb-2">Custom Fields</p>
+                <div className="space-y-2">
+                  {(task.custom_field_values ?? []).map((cfv: CustomFieldValue) => {
+                    const def = cfv.field_definition;
+                    const current = cfEdits[def.id] ?? cfv.value ?? '';
+                    const type = def.field_type as CustomFieldType;
+                    return (
+                      <div key={def.id}>
+                        <p className="text-xs text-gray-500 mb-0.5">{def.name}</p>
+                        {type === 'checkbox' ? (
+                          <input
+                            type="checkbox"
+                            title={def.name}
+                            checked={current === '1'}
+                            onChange={(e) => setCfEdits((p) => ({ ...p, [def.id]: e.target.checked ? '1' : '0' }))}
+                            className="rounded"
+                          />
+                        ) : type === 'select' && def.options ? (
+                          <select
+                            title={def.name}
+                            value={current}
+                            onChange={(e) => setCfEdits((p) => ({ ...p, [def.id]: e.target.value }))}
+                            className="w-full border rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          >
+                            <option value="">—</option>
+                            {def.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        ) : (
+                          <input
+                            type={type === 'number' ? 'number' : type === 'date' ? 'date' : type === 'url' ? 'url' : 'text'}
+                            title={def.name}
+                            value={current}
+                            onChange={(e) => setCfEdits((p) => ({ ...p, [def.id]: e.target.value }))}
+                            placeholder="—"
+                            className="w-full border rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                  {Object.keys(cfEdits).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={saveCustomFields}
+                      disabled={savingCf}
+                      className="text-xs bg-blue-600 text-white rounded-lg px-3 py-1 hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {savingCf ? 'Saving…' : 'Save fields'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             <hr className="border-gray-200" />
 

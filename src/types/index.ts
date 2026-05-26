@@ -131,6 +131,7 @@ export interface Task {
   milestone?: Milestone;
   sprint?: Sprint;
   project_status?: ProjectStatus;
+  custom_field_values?: CustomFieldValue[];
 }
 
 export interface TaskFilters {
@@ -264,4 +265,157 @@ export interface VelocitySprint {
 export interface VelocityData {
   sprints: VelocitySprint[];
   average_velocity: number;
+}
+
+// ── Time tracking ─────────────────────────────────────────────────────────────
+export interface TimeLog {
+  id: string;
+  task_id: string;
+  task_title?: string;
+  user: { id: string; name: string } | null;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_minutes: number | null;
+  note: string | null;
+  is_running: boolean;
+}
+
+export interface TaskTimeSummary {
+  logs: TimeLog[];
+  total_logged_minutes: number;
+}
+
+// ── Activity log ──────────────────────────────────────────────────────────────
+export interface ActivityEntry {
+  id: string;
+  action: string;
+  subject_type?: string;
+  subject_id?: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+  actor: { id: string; name: string } | null;
+}
+
+export interface ActivityPage {
+  data: ActivityEntry[];
+  current_page: number;
+  last_page: number;
+  total: number;
+}
+
+// ── Global search ─────────────────────────────────────────────────────────────
+export interface SearchResult {
+  type: 'task' | 'project' | 'comment' | 'member';
+  id: string;
+  title: string;
+  project_id?: string;
+  project_name?: string;
+  task_id?: string;
+  task_title?: string;
+  email?: string;
+  status?: string;
+  priority?: string;
+  author?: string;
+  description?: string;
+}
+
+export interface SearchResults {
+  query: string;
+  tasks: SearchResult[];
+  projects: SearchResult[];
+  comments: SearchResult[];
+  members: SearchResult[];
+}
+
+// ── Automation rules ──────────────────────────────────────────────────────────
+export type AutomationTriggerType =
+  | 'task_created' | 'status_changed' | 'due_date_reached'
+  | 'assignee_added' | 'comment_added';
+
+export type AutomationActionType =
+  | 'change_status' | 'assign_user' | 'add_label'
+  | 'post_comment' | 'send_notification';
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  is_active: boolean;
+  trigger_type: AutomationTriggerType;
+  trigger_config: Record<string, unknown> | null;
+  action_type: AutomationActionType;
+  action_config: Record<string, unknown> | null;
+  last_triggered: string | null;
+  last_result: 'success' | 'failed' | null;
+  created_at: string;
+}
+
+// ── Webhooks ──────────────────────────────────────────────────────────────────
+export type WebhookEvent =
+  | 'task.created' | 'task.updated' | 'task.deleted'
+  | 'task.status_changed' | 'comment.created'
+  | 'project.created' | 'project.updated';
+
+export interface Webhook {
+  id: string;
+  name: string;
+  url: string;
+  events: WebhookEvent[];
+  is_active: boolean;
+  created_at: string;
+  recent_deliveries?: WebhookDelivery[];
+}
+
+export interface WebhookDelivery {
+  id: string;
+  event: string;
+  response_status: number | null;
+  delivered_at: string | null;
+  failed_at: string | null;
+  created_at: string;
+}
+
+// ── Project members (per-project roles) ───────────────────────────────────────
+export type ProjectRole = 'viewer' | 'editor' | 'manager';
+
+export interface ProjectMember {
+  user: User;
+  role: ProjectRole;
+  created_at: string;
+}
+
+// ── Custom fields ─────────────────────────────────────────────────────────────
+export type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'url' | 'checkbox';
+
+export interface CustomFieldDefinition {
+  id: string;
+  project_id: string;
+  name: string;
+  field_type: CustomFieldType;
+  options: string[] | null;
+  position: number;
+  is_required: boolean;
+}
+
+export interface CustomFieldValue {
+  field_definition: CustomFieldDefinition;
+  value: string | null;
+}
+
+// ── Import / Export ───────────────────────────────────────────────────────────
+export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface ImportJob {
+  id: string;
+  status: ImportJobStatus;
+  format: string;
+  tasks_created: number | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Two-factor authentication ─────────────────────────────────────────────────
+export interface TwoFactorStatus {
+  enabled: boolean;
+  confirmed: boolean;
 }

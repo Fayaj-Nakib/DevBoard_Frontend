@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { getEcho } from '@/lib/echo';
 
 interface Notification {
   id: string;
@@ -12,6 +14,7 @@ interface Notification {
 }
 
 export default function NotificationsBell() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -30,12 +33,28 @@ export default function NotificationsBell() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Poll every 30 s so the badge stays fresh
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30_000);
-    return () => clearInterval(interval);
   }, [fetchNotifications]);
+
+  // Subscribe to personal notification channel via Reverb
+  useEffect(() => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const echo = getEcho(token);
+    const channel = echo.private(`private-user.${user.id}`);
+
+    channel.listen('.notification.created', (data: { notification: Notification }) => {
+      setNotifications((prev) => [data.notification, ...prev]);
+      setUnreadCount((c) => c + 1);
+    });
+
+    return () => {
+      echo.leave(`private-user.${user.id}`);
+    };
+  }, [user?.id]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -50,12 +69,16 @@ export default function NotificationsBell() {
 
   const markRead = async (id: string) => {
     await api.patch(`/notifications/${id}/read`);
-    fetchNotifications();
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
+    );
+    setUnreadCount((c) => Math.max(0, c - 1));
   };
 
   const markAllRead = async () => {
     await api.patch('/notifications/read-all');
-    fetchNotifications();
+    setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+    setUnreadCount(0);
   };
 
   const displayText = (n: Notification) =>
@@ -64,6 +87,7 @@ export default function NotificationsBell() {
   return (
     <div ref={ref} className="relative">
       <button
+        type="button"
         onClick={() => {
           setOpen((o) => !o);
           if (!open) fetchNotifications();
@@ -71,7 +95,6 @@ export default function NotificationsBell() {
         className="relative p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
         aria-label="Notifications"
       >
-        {/* Bell icon */}
         <svg
           xmlns="http://www.w3.org/2000/svg"
           className="h-5 w-5"
@@ -99,10 +122,7 @@ export default function NotificationsBell() {
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h3 className="text-sm font-semibold text-gray-800">Notifications</h3>
             {unreadCount > 0 && (
-              <button
-                onClick={markAllRead}
-                className="text-xs text-blue-600 hover:underline"
-              >
+              <button type="button" onClick={markAllRead} className="text-xs text-blue-600 hover:underline">
                 Mark all read
               </button>
             )}

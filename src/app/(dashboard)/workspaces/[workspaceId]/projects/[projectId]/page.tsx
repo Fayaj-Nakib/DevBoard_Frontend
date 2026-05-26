@@ -1,10 +1,11 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjectStatuses } from '@/hooks/useProjectStatuses';
+import { useEcho } from '@/hooks/useEcho';
 import KanbanBoard, { ReorderItem } from '@/components/kanban/KanbanBoard';
 import BacklogView from '@/components/BacklogView';
 import TimelineView from '@/components/TimelineView';
@@ -17,6 +18,7 @@ import SprintPanel from '@/components/SprintPanel';
 import FilterBar from '@/components/FilterBar';
 import BulkActionBar from '@/components/BulkActionBar';
 import NotificationsBell from '@/components/NotificationsBell';
+import CommandPalette from '@/components/CommandPalette';
 import type { Task, TaskFilters } from '@/types';
 
 type ViewTab = 'board' | 'backlog' | 'timeline' | 'calendar' | 'workload' | 'analytics';
@@ -38,6 +40,9 @@ export default function ProjectPage() {
 
   const [activeTab, setActiveTab] = useState<ViewTab>('board');
   const [createWithDate, setCreateWithDate] = useState<string | undefined>();
+
+  // ── Real-time (Reverb) ────────────────────────────────────────────────────
+  const { echo, connected } = useEcho();
 
   // ── Project statuses (for dynamic board columns) ──────────────────────────
   const { statuses } = useProjectStatuses(workspaceId, projectId);
@@ -75,12 +80,25 @@ export default function ProjectPage() {
   }, [router]);
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
-  const { tasks, loading, reorder, refresh } = useTasks(workspaceId, projectId, filters);
+  const { tasks, loading, reorder, refresh } = useTasks(workspaceId, projectId, filters, echo);
 
   // ── Modal state ───────────────────────────────────────────────────────────
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showSprints, setShowSprints] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
+
+  // Cmd+K / Ctrl+K → open command palette
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowPalette((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // ── Bulk selection ────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -154,6 +172,12 @@ export default function ProjectPage() {
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
+          {connected && (
+            <span className="hidden sm:flex items-center gap-1 text-xs text-green-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              Live
+            </span>
+          )}
           {totalTasks > 0 && activeTab === 'board' && (
             <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1">
               <span className="text-green-600 font-semibold">{doneTasks}</span>
@@ -184,6 +208,16 @@ export default function ProjectPage() {
             title="Project settings"
           >
             ⚙️
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPalette(true)}
+            title="Search (Ctrl+K)"
+            className="text-sm text-gray-500 border rounded-lg px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1.5"
+          >
+            <span>⌕</span>
+            <span className="hidden sm:inline text-xs text-gray-400">Ctrl+K</span>
           </button>
 
           <NotificationsBell />
@@ -321,6 +355,14 @@ export default function ProjectPage() {
         onClear={clearSelection}
         onRefresh={refresh}
       />
+
+      {showPalette && (
+        <CommandPalette
+          workspaceId={workspaceId}
+          onClose={() => setShowPalette(false)}
+          onTaskClick={(taskId) => { setSelectedTaskId(taskId); setShowPalette(false); }}
+        />
+      )}
     </div>
   );
 }

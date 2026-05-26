@@ -65,6 +65,14 @@ export default function ProjectsPage() {
         </div>
         <div className="flex items-center gap-3">
           <NotificationsBell />
+          <button
+            type="button"
+            onClick={() => router.push(`/workspaces/${workspaceId}/settings`)}
+            className="text-sm text-gray-500 border rounded-lg px-3 py-1.5 hover:bg-gray-50"
+            title="Workspace settings"
+          >
+            ⚙ Settings
+          </button>
           <span className="text-sm text-gray-500">{user?.name}</span>
           <button type="button" onClick={logout} className="text-sm text-red-500 hover:underline">
             Logout
