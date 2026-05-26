@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { getEcho } from '@/lib/echo';
@@ -19,10 +19,12 @@ export default function NotificationsBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [version, setVersion] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = useCallback(() => {
-    setLoading(true);
+  const fetchNotifications = () => setVersion((v) => v + 1);
+
+  useEffect(() => {
     api
       .get('/notifications')
       .then((r) => {
@@ -31,11 +33,7 @@ export default function NotificationsBell() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+  }, [version]);
 
   // Subscribe to personal notification channel via Reverb
   useEffect(() => {

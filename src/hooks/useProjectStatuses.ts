@@ -7,18 +7,19 @@ import type { ProjectStatus } from '@/types';
 export function useProjectStatuses(workspaceId: string, projectId: string) {
   const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [version, setVersion] = useState(0);
 
-  const fetch = useCallback(() => {
-    setLoading(true);
+  useEffect(() => {
     api
       .get<ProjectStatus[]>(`/workspaces/${workspaceId}/projects/${projectId}/statuses`)
       .then((r) => setStatuses(r.data))
       .finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
+  }, [workspaceId, projectId, version]);
 
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setVersion((v) => v + 1);
+  }, []);
 
-  return { statuses, loading, refresh: fetch };
+  return { statuses, loading, refresh };
 }

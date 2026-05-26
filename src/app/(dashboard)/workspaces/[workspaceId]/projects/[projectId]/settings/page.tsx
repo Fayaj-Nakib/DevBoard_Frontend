@@ -422,7 +422,6 @@ function AutomationRulesManager({ workspaceId, projectId }: { workspaceId: strin
 
 // ── Members Manager ───────────────────────────────────────────────────────────
 
-const ROLE_LABELS: Record<ProjectRole, string> = { viewer: 'Viewer', editor: 'Editor', manager: 'Manager' };
 const ROLE_COLORS: Record<ProjectRole, string> = {
   viewer: 'bg-gray-100 text-gray-600',
   editor: 'bg-blue-100 text-blue-700',
@@ -905,7 +904,7 @@ function GitHubProjectSettings({ workspaceId, projectId }: { workspaceId: string
           </div>
 
           {issues.length === 0 && !loadingIssues && (
-            <p className="text-xs text-gray-400 text-center py-2">Click "Load Issues" to fetch open issues from GitHub.</p>
+            <p className="text-xs text-gray-400 text-center py-2">Click &ldquo;Load Issues&rdquo; to fetch open issues from GitHub.</p>
           )}
 
           <div className="space-y-1.5 max-h-80 overflow-y-auto">

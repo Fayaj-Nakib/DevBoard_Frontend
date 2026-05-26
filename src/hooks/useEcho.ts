@@ -15,7 +15,7 @@ export function useEcho() {
     if (!token) return;
 
     const instance = getEcho(token);
-    setEcho(instance);
+    setEcho(instance); // eslint-disable-line react-hooks/set-state-in-effect
 
     instance.connector.pusher.connection.bind('connected', () => setConnected(true));
     instance.connector.pusher.connection.bind('disconnected', () => setConnected(false));

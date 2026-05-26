@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -33,9 +33,11 @@ export default function AnalyticsDashboard({ workspaceId, projectId }: Props) {
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [velocity, setVelocity] = useState<VelocityData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [version, setVersion] = useState(0);
 
-  const fetchAll = useCallback(() => {
-    setLoading(true);
+  const fetchAll = () => { setLoading(true); setVersion((v) => v + 1); };
+
+  useEffect(() => {
     Promise.all([
       api.get<ProjectStats>(`/workspaces/${workspaceId}/projects/${projectId}/stats`),
       api.get<VelocityData>(`/workspaces/${workspaceId}/projects/${projectId}/velocity`),
@@ -45,9 +47,7 @@ export default function AnalyticsDashboard({ workspaceId, projectId }: Props) {
         setVelocity(v.data);
       })
       .finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
-
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  }, [workspaceId, projectId, version]);
 
   if (loading) {
     return (

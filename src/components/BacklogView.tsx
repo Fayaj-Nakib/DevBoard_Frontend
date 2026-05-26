@@ -73,7 +73,7 @@ export default function BacklogView({ workspaceId, projectId, statuses, onTaskCl
       <div className="flex flex-col items-center justify-center h-64 gap-2 text-center">
         <p className="text-2xl">📋</p>
         <p className="text-gray-500 text-sm font-medium">Backlog is empty</p>
-        <p className="text-gray-400 text-xs">Open a task and toggle "Add to Backlog" to queue it here</p>
+        <p className="text-gray-400 text-xs">Open a task and toggle &ldquo;Add to Backlog&rdquo; to queue it here</p>
       </div>
     );
   }

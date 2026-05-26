@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -25,9 +25,7 @@ export default function BurndownChart({ workspaceId, projectId, sprintId }: Prop
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(() => {
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
     api
       .get<BurndownData>(
         `/workspaces/${workspaceId}/projects/${projectId}/sprints/${sprintId}/burndown`
@@ -36,8 +34,6 @@ export default function BurndownChart({ workspaceId, projectId, sprintId }: Prop
       .catch(() => setError('Could not load burndown data.'))
       .finally(() => setLoading(false));
   }, [workspaceId, projectId, sprintId]);
-
-  useEffect(() => { fetch(); }, [fetch]);
 
   if (loading) {
     return (

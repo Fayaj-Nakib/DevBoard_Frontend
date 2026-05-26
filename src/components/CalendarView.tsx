@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import type { CalendarTask } from '@/types';
 
@@ -38,9 +38,11 @@ export default function CalendarView({ workspaceId, projectId, currentUserId, on
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [myTasksOnly, setMyTasksOnly] = useState(false);
+  const [version, setVersion] = useState(0);
 
-  const fetchCalendar = useCallback(() => {
-    setLoading(true);
+  const fetchCalendar = () => setVersion((v) => v + 1);
+
+  useEffect(() => {
     const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
     api
       .get<CalendarTask[]>(`/workspaces/${workspaceId}/projects/${projectId}/calendar`, {
@@ -48,9 +50,7 @@ export default function CalendarView({ workspaceId, projectId, currentUserId, on
       })
       .then((r) => setTasks(r.data))
       .finally(() => setLoading(false));
-  }, [workspaceId, projectId, year, month]);
-
-  useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
+  }, [workspaceId, projectId, year, month, version]);
 
   const filtered = useMemo(() => {
     if (!myTasksOnly || !currentUserId) return tasks;

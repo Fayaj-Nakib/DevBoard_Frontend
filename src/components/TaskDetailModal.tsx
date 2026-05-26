@@ -255,7 +255,7 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
     api.get<Label[]>(`/workspaces/${workspaceId}/labels`).then((r) => setAllLabels(r.data));
     api.get<Milestone[]>(`/workspaces/${workspaceId}/projects/${projectId}/milestones`).then((r) => setMilestones(r.data));
     api.get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`).then((r) => setSprints(r.data));
-  }, [taskId, workspaceId, projectId, fetchTask, fetchDeps]);
+  }, [taskId, workspaceId, projectId, fetchTask, fetchDeps, fetchActivity]);
 
   const save = async () => {
     setSaving(true);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import type { Sprint, WorkloadMember } from '@/types';
 
@@ -38,30 +38,29 @@ export default function WorkloadView({ workspaceId, projectId, onTaskClick }: Pr
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [sprintId, setSprintId] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [version, setVersion] = useState(0);
 
-  const fetchSprints = useCallback(() => {
+  const fetchWorkload = () => setVersion((v) => v + 1);
+
+  useEffect(() => {
     api
       .get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`)
       .then((r) => setSprints(r.data));
   }, [workspaceId, projectId]);
 
-  const fetchWorkload = useCallback(() => {
-    setLoading(true);
+  useEffect(() => {
     const params: Record<string, string> = {};
     if (sprintId) params.sprint_id = sprintId;
     api
       .get<WorkloadMember[]>(`/workspaces/${workspaceId}/projects/${projectId}/workload`, { params })
       .then((r) => setMembers(r.data))
       .finally(() => setLoading(false));
-  }, [workspaceId, projectId, sprintId]);
-
-  useEffect(() => { fetchSprints(); }, [fetchSprints]);
-  useEffect(() => { fetchWorkload(); }, [fetchWorkload]);
+  }, [workspaceId, projectId, sprintId, version]);
 
   const toggleExpand = (userId: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      next.has(userId) ? next.delete(userId) : next.add(userId);
+      if (next.has(userId)) { next.delete(userId); } else { next.add(userId); }
       return next;
     });
   };

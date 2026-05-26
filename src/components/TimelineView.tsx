@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 import type { TimelineGroup, TimelineTask } from '@/types';
 
@@ -12,7 +12,6 @@ interface Props {
 
 type Zoom = 'week' | 'month' | 'quarter';
 
-const ZOOM_DAYS: Record<Zoom, number> = { week: 7, month: 30, quarter: 91 };
 const DAY_PX: Record<Zoom, number> = { week: 60, month: 20, quarter: 7 };
 const ROW_H = 36;
 const LABEL_W = 200;
@@ -41,17 +40,17 @@ export default function TimelineView({ workspaceId, projectId, onTaskClick }: Pr
   const [groups, setGroups] = useState<TimelineGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState<Zoom>('month');
+  const [version, setVersion] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const fetchTimeline = useCallback(() => {
-    setLoading(true);
+  const fetchTimeline = () => setVersion((v) => v + 1);
+
+  useEffect(() => {
     api
       .get<TimelineGroup[]>(`/workspaces/${workspaceId}/projects/${projectId}/timeline`)
       .then((r) => setGroups(r.data))
       .finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
-
-  useEffect(() => { fetchTimeline(); }, [fetchTimeline]);
+  }, [workspaceId, projectId, version]);
 
   if (loading) {
     return (

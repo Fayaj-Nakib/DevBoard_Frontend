@@ -739,6 +739,7 @@ function TwoFactorSettings() {
         <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
           <h3 className="text-sm font-semibold text-gray-700">Scan with your authenticator app</h3>
           <div className="flex flex-col items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               ref={_qrRef}
               src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrUri)}`}

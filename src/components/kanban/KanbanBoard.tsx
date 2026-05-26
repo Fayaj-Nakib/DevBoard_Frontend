@@ -236,7 +236,6 @@ export default function KanbanBoard({ tasks, columns, onReorder, onTaskClick, se
         {colDefs.map((col) => (
           <div
             key={col.id}
-            /* eslint-disable-next-line react/forbid-dom-props */
             style={{ '--col-accent': col.color } as React.CSSProperties}
             className="flex flex-col bg-gray-50 rounded-xl min-w-64 w-64 flex-shrink-0 border-t-2 [border-top-color:var(--col-accent)]"
           >
