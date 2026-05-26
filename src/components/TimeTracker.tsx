@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 import type { TimeLog, TaskTimeSummary } from '@/types';
 
@@ -28,36 +28,35 @@ function fmtElapsed(startIso: string): string {
 export default function TimeTracker({ taskId, currentUserId }: Props) {
   const [summary, setSummary] = useState<TaskTimeSummary | null>(null);
   const [activeTimer, setActiveTimer] = useState<TimeLog | null>(null);
-  const [elapsed, setElapsed] = useState('');
   const [showManual, setShowManual] = useState(false);
   const [manualForm, setManualForm] = useState({ hours: '', minutes: '', note: '', date: new Date().toISOString().split('T')[0] });
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNote, setEditNote] = useState('');
+  const [version, setVersion] = useState(0);
+  const [, setTick] = useState(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchLogs = useCallback(() => {
+  useEffect(() => {
     api.get<TaskTimeSummary>(`/tasks/${taskId}/time-logs`)
       .then((r) => {
         setSummary(r.data);
         const running = r.data.logs.find((l) => l.is_running && l.user?.id === currentUserId);
         setActiveTimer(running ?? null);
       });
-  }, [taskId, currentUserId]);
+  }, [taskId, currentUserId, version]);
 
-  useEffect(() => { fetchLogs(); }, [fetchLogs]);
-
-  // Tick the elapsed display every second while a timer is running
+  // Tick every second while a timer is running to keep elapsed display fresh
   useEffect(() => {
     if (tickRef.current) clearInterval(tickRef.current);
     if (activeTimer?.started_at) {
-      setElapsed(fmtElapsed(activeTimer.started_at));
-      tickRef.current = setInterval(() => {
-        setElapsed(fmtElapsed(activeTimer.started_at!));
-      }, 1000);
+      tickRef.current = setInterval(() => setTick((v) => v + 1), 1000);
     }
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, [activeTimer]);
+
+  const fetchLogs = () => setVersion((v) => v + 1);
+  const elapsed = activeTimer?.started_at ? fmtElapsed(activeTimer.started_at) : '';
 
   const startTimer = async () => {
     setSaving(true);
@@ -163,8 +162,9 @@ export default function TimeTracker({ taskId, currentUserId }: Props) {
           <p className="text-xs font-semibold text-gray-600">Add manual entry</p>
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-xs text-gray-400 block mb-0.5">Hours</label>
+              <label htmlFor="manual-hours" className="text-xs text-gray-400 block mb-0.5">Hours</label>
               <input
+                id="manual-hours"
                 type="number"
                 min="0"
                 value={manualForm.hours}
@@ -174,8 +174,9 @@ export default function TimeTracker({ taskId, currentUserId }: Props) {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-0.5">Minutes</label>
+              <label htmlFor="manual-minutes" className="text-xs text-gray-400 block mb-0.5">Minutes</label>
               <input
+                id="manual-minutes"
                 type="number"
                 min="0"
                 max="59"
@@ -186,8 +187,9 @@ export default function TimeTracker({ taskId, currentUserId }: Props) {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-0.5">Date</label>
+              <label htmlFor="manual-date" className="text-xs text-gray-400 block mb-0.5">Date</label>
               <input
+                id="manual-date"
                 type="date"
                 value={manualForm.date}
                 onChange={(e) => setManualForm({ ...manualForm, date: e.target.value })}
@@ -243,7 +245,9 @@ export default function TimeTracker({ taskId, currentUserId }: Props) {
                 </div>
                 {editingId === log.id ? (
                   <div className="mt-1 flex gap-1">
+                    {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
                     <input
+                      aria-label="Edit note"
                       value={editNote}
                       onChange={(e) => setEditNote(e.target.value)}
                       className="flex-1 border rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-400"

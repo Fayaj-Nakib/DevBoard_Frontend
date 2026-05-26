@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -119,13 +119,15 @@ function WebhookManager({ workspaceId }: { workspaceId: string }) {
     events: [] as WebhookEvent[],
   });
 
-  const fetchWebhooks = useCallback(() => {
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
     api.get<Webhook[]>(`/workspaces/${workspaceId}/webhooks`)
       .then((r) => setWebhooks(r.data))
       .finally(() => setLoading(false));
-  }, [workspaceId]);
+  }, [workspaceId, version]);
 
-  useEffect(() => { fetchWebhooks(); }, [fetchWebhooks]);
+  const fetchWebhooks = () => setVersion((v) => v + 1);
 
   const toggleEvent = (event: WebhookEvent) => {
     setForm((f) => ({
@@ -453,7 +455,9 @@ function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchMembers = useCallback(() => {
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
     api.get<WsMember[]>(`/workspaces/${workspaceId}/members`)
       .then((r) => {
         setMembers(r.data);
@@ -461,9 +465,9 @@ function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
         setMyRole(me?.role ?? null);
       })
       .finally(() => setLoading(false));
-  }, [workspaceId, user?.id]);
+  }, [workspaceId, user?.id, version]);
 
-  useEffect(() => { fetchMembers(); }, [fetchMembers]);
+  const fetchMembers = () => setVersion((v) => v + 1);
 
   const invite = async () => {
     if (!inviteEmail.trim()) return;
@@ -615,11 +619,10 @@ function SecurityTab({ workspaceId }: { workspaceId: string }) {
             <div className="flex items-start gap-3">
               <button
                 type="button"
-                role="switch"
-                aria-checked={require2fa ? 'true' : 'false'}
+                aria-pressed={require2fa ? 'true' : 'false'}
+                aria-label={require2fa ? 'Disable 2FA requirement' : 'Enable 2FA requirement'}
                 onClick={() => !saving && toggleRequire2fa(!require2fa)}
                 disabled={saving}
-                title={require2fa ? 'Disable requirement' : 'Enable requirement'}
                 className={`mt-0.5 w-9 h-5 rounded-full transition-colors flex-shrink-0 relative disabled:opacity-50 ${require2fa ? 'bg-blue-600' : 'bg-gray-200'}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${require2fa ? 'translate-x-4' : 'translate-x-0.5'}`} />
@@ -653,13 +656,15 @@ function TwoFactorSettings() {
   const [error, setError] = useState('');
   const _qrRef = useRef<HTMLImageElement>(null);
 
-  const fetchStatus = useCallback(() => {
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
     api.get<TwoFactorStatus>('/user/two-factor-status')
       .then((r) => setStatus(r.data))
       .finally(() => setLoading(false));
-  }, []);
+  }, [version]);
 
-  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+  const fetchStatus = () => setVersion((v) => v + 1);
 
   const startEnable = async () => {
     setSaving(true);
@@ -836,13 +841,11 @@ function GitHubSettings({ workspaceId }: { workspaceId: string }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const fetchStatus = useCallback(() => {
+  useEffect(() => {
     api.get<GitHubConnection>(`/workspaces/${workspaceId}/github`)
       .then((r) => setConn(r.data))
       .finally(() => setLoading(false));
   }, [workspaceId]);
-
-  useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
   const connect = async () => {
     if (!token.trim()) return;
