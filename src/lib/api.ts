@@ -23,6 +23,12 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
+    if (err.response?.status === 403 && err.response?.data?.message === '2fa_required') {
+      const match = (err.config?.url as string | undefined)?.match(/\/workspaces\/([^/?]+)/);
+      if (match) {
+        window.location.href = `/workspaces/${match[1]}/settings?tab=security`;
+      }
+    }
     return Promise.reject(err);
   }
 );

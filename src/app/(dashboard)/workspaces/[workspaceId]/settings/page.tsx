@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import type { Webhook, WebhookEvent, WebhookDelivery, TwoFactorStatus } from '@/types';
@@ -15,8 +15,12 @@ const ALL_EVENTS: WebhookEvent[] = [
 export default function WorkspaceSettingsPage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<'webhooks' | 'profile' | 'security'>('webhooks');
+  const initialTab = searchParams.get('tab');
+  const [tab, setTab] = useState<'webhooks' | 'profile' | 'security'>(
+    initialTab === 'security' ? 'security' : initialTab === 'profile' ? 'profile' : 'webhooks'
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -71,7 +75,7 @@ export default function WorkspaceSettingsPage() {
 
         {tab === 'webhooks' && <WebhookManager workspaceId={workspaceId} />}
         {tab === 'profile'  && <UserDigestSettings />}
-        {tab === 'security' && <TwoFactorSettings />}
+        {tab === 'security' && <SecurityTab workspaceId={workspaceId} />}
       </div>
     </div>
   );
@@ -393,6 +397,84 @@ function UserDigestSettings() {
           {saved && <span className="text-xs text-green-600">Saved!</span>}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Security Tab (workspace policy + personal 2FA) ────────────────────────────
+
+interface WorkspaceSecurityData {
+  require_2fa: boolean;
+  members: Array<{ user_id: string; role: string }>;
+}
+
+function SecurityTab({ workspaceId }: { workspaceId: string }) {
+  const { user } = useAuth();
+  const [require2fa, setRequire2fa] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      api.get<WorkspaceSecurityData>(`/workspaces/${workspaceId}`),
+      api.get<Array<{ id: string; role: string }>>(`/workspaces/${workspaceId}/members`),
+    ]).then(([wsRes, membersRes]) => {
+      setRequire2fa(wsRes.data.require_2fa ?? false);
+      const me = membersRes.data.find((m) => m.id === user?.id);
+      setUserRole(me?.role ?? null);
+    }).finally(() => setLoading(false));
+  }, [workspaceId, user?.id]);
+
+  const toggleRequire2fa = async (val: boolean) => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await api.patch(`/workspaces/${workspaceId}/security`, { require_2fa: val });
+      setRequire2fa(val);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+
+  const canEditPolicy = userRole === 'owner' || userRole === 'admin';
+
+  return (
+    <div className="space-y-8">
+      {canEditPolicy && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-800 mb-1">Workspace Security Policy</h2>
+            <p className="text-xs text-gray-500">Enforce security requirements for all workspace members.</p>
+          </div>
+          <div className="bg-white border rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={require2fa ? 'true' : 'false'}
+                onClick={() => !saving && toggleRequire2fa(!require2fa)}
+                disabled={saving}
+                title={require2fa ? 'Disable requirement' : 'Enable requirement'}
+                className={`mt-0.5 w-9 h-5 rounded-full transition-colors flex-shrink-0 relative disabled:opacity-50 ${require2fa ? 'bg-blue-600' : 'bg-gray-200'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${require2fa ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </button>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">Require two-factor authentication</p>
+                <p className="text-xs text-gray-400 mt-0.5">Members without 2FA will be blocked from accessing workspace resources until they enable it.</p>
+              </div>
+              {saved && <span className="text-xs text-green-600 self-center">Saved!</span>}
+            </div>
+          </div>
+        </div>
+      )}
+      <TwoFactorSettings />
     </div>
   );
 }
