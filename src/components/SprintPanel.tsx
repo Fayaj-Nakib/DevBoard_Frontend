@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import api from '@/lib/api';
 import type { Sprint } from '@/types';
+import BurndownChart from '@/components/BurndownChart';
 
 interface Props {
   workspaceId: string;
@@ -21,6 +22,7 @@ export default function SprintPanel({ workspaceId, projectId, onClose }: Props) 
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: '', goal: '', start_date: '', end_date: '' });
   const [saving, setSaving] = useState(false);
+  const [burndownSprintId, setBurndownSprintId] = useState<string | null>(null);
 
   const fetchSprints = useCallback(() => {
     api.get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`)
@@ -29,7 +31,7 @@ export default function SprintPanel({ workspaceId, projectId, onClose }: Props) 
 
   useEffect(() => { fetchSprints(); }, [fetchSprints]);
 
-  const createSprint = async (e: React.FormEvent) => {
+  const createSprint = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!form.name.trim()) return;
     setSaving(true);
@@ -73,67 +75,91 @@ export default function SprintPanel({ workspaceId, projectId, onClose }: Props) 
             <p className="text-sm text-gray-400 text-center py-8">No sprints yet.</p>
           )}
 
-          {sprints.map((sprint) => (
-            <div key={sprint.id} className="border rounded-xl p-3 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium text-gray-800">{sprint.name}</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 capitalize ${STATUS_BADGE[sprint.status]}`}>
-                  {sprint.status}
-                </span>
-              </div>
+          {sprints.map((sprint) => {
+            const showBurndown = burndownSprintId === sprint.id;
+            const progress = sprint.progress ?? 0;
 
-              {sprint.goal && <p className="text-xs text-gray-500">{sprint.goal}</p>}
+            return (
+              <div key={sprint.id} className="border rounded-xl p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-800">{sprint.name}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 capitalize ${STATUS_BADGE[sprint.status]}`}>
+                    {sprint.status}
+                  </span>
+                </div>
 
-              <div className="flex items-center gap-3 text-xs text-gray-400">
-                {sprint.start_date && <span>{new Date(sprint.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
-                {sprint.start_date && sprint.end_date && <span>→</span>}
-                {sprint.end_date && <span>{new Date(sprint.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
-              </div>
+                {sprint.goal && <p className="text-xs text-gray-500">{sprint.goal}</p>}
 
-              {sprint.tasks_count != null && sprint.tasks_count > 0 && (
-                <div>
-                  <div className="flex justify-between text-xs text-gray-400 mb-0.5">
-                    <span>{sprint.done_count ?? 0}/{sprint.tasks_count} done</span>
-                    <span>{sprint.progress ?? 0}%</span>
+                <div className="flex items-center gap-3 text-xs text-gray-400">
+                  {sprint.start_date && <span>{new Date(sprint.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                  {sprint.start_date && sprint.end_date && <span>→</span>}
+                  {sprint.end_date && <span>{new Date(sprint.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                </div>
+
+                {sprint.tasks_count != null && sprint.tasks_count > 0 && (
+                  <div>
+                    <div className="flex justify-between text-xs text-gray-400 mb-0.5">
+                      <span>{sprint.done_count ?? 0}/{sprint.tasks_count} done</span>
+                      <span>{progress}%</span>
+                    </div>
+                    {/* SVG avoids inline style — SVG presentation attrs are not CSS inline styles */}
+                    <svg className="w-full" height="6" aria-hidden="true">
+                      <rect x="0" y="0" width="100%" height="6" rx="3" fill="#F3F4F6" />
+                      <rect x="0" y="0" width={`${progress}%`} height="6" rx="3" fill="#22C55E" />
+                    </svg>
                   </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500 rounded-full transition-all"
-                      style={{ width: `${sprint.progress ?? 0}%` }}
+                )}
+
+                {/* Burndown chart (toggled per sprint) */}
+                {showBurndown && (
+                  <div className="pt-1">
+                    <BurndownChart
+                      workspaceId={workspaceId}
+                      projectId={projectId}
+                      sprintId={sprint.id}
                     />
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="flex gap-2 pt-1">
-                {sprint.status === 'planning' && (
+                <div className="flex gap-2 pt-1 flex-wrap">
+                  {sprint.status === 'planning' && (
+                    <button
+                      type="button"
+                      onClick={() => updateStatus(sprint.id, 'active')}
+                      className="text-xs text-green-600 hover:text-green-800 font-medium"
+                    >
+                      Start Sprint
+                    </button>
+                  )}
+                  {sprint.status === 'active' && (
+                    <button
+                      type="button"
+                      onClick={() => updateStatus(sprint.id, 'completed')}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Complete
+                    </button>
+                  )}
+                  {(sprint.status === 'active' || sprint.status === 'completed') && (
+                    <button
+                      type="button"
+                      onClick={() => setBurndownSprintId(showBurndown ? null : sprint.id)}
+                      className="text-xs text-purple-500 hover:text-purple-700 font-medium"
+                    >
+                      {showBurndown ? 'Hide Burndown' : 'Burndown ▾'}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => updateStatus(sprint.id, 'active')}
-                    className="text-xs text-green-600 hover:text-green-800 font-medium"
+                    onClick={() => deleteSprint(sprint.id)}
+                    className="text-xs text-red-400 hover:text-red-600 ml-auto"
                   >
-                    Start Sprint
+                    Delete
                   </button>
-                )}
-                {sprint.status === 'active' && (
-                  <button
-                    type="button"
-                    onClick={() => updateStatus(sprint.id, 'completed')}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    Complete
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => deleteSprint(sprint.id)}
-                  className="text-xs text-red-400 hover:text-red-600 ml-auto"
-                >
-                  Delete
-                </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Create sprint form */}

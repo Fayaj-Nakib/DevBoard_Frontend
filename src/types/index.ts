@@ -173,3 +173,95 @@ export interface PaginatedResponse<T> {
   per_page: number;
   total: number;
 }
+
+// ── Timeline ─────────────────────────────────────────────────────────────────
+export interface TimelineTask {
+  id: string;
+  title: string;
+  started_at: string | null;
+  due_date: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  estimate?: number;
+  assignees: { id: string; name: string }[];
+  project_status: { id: string; name: string; color: string } | null;
+  blocked_by_ids: string[];
+}
+
+export interface TimelineGroup {
+  milestone: { id: string; name: string } | null;
+  tasks: TimelineTask[];
+}
+
+// ── Calendar ─────────────────────────────────────────────────────────────────
+export interface CalendarTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_date: string | null;
+  started_at: string | null;
+  estimate?: number;
+  assignees: { id: string; name: string }[];
+  labels: { id: string; name: string; color: string }[];
+  project_status: { id: string; color: string } | null;
+}
+
+// ── Burndown ─────────────────────────────────────────────────────────────────
+export interface BurndownDay {
+  date: string;
+  remaining_points: number;
+  ideal_points: number;
+}
+
+export interface BurndownData {
+  sprint: { id: string; name: string; start_date: string; end_date: string; total_points: number };
+  daily: BurndownDay[];
+}
+
+// ── Workload ─────────────────────────────────────────────────────────────────
+export interface WorkloadTask {
+  id: string;
+  title: string;
+  due_date: string | null;
+  status: string;
+  priority: TaskPriority;
+  estimate?: number;
+  is_overdue: boolean;
+}
+
+export interface WorkloadMember {
+  user: { id: string; name: string; email: string };
+  tasks: WorkloadTask[];
+  total_tasks: number;
+  overdue_count: number;
+  total_estimate: number;
+}
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+export interface ProjectStats {
+  open_tasks: number;
+  closed_tasks: number;
+  overdue_tasks: number;
+  total_tasks: number;
+  completion_rate: number;
+  tasks_by_status: { status_name: string; color: string; count: number }[];
+  tasks_by_assignee: { id: string; name: string; count: number }[];
+  tasks_created_last_30_days: number;
+  tasks_completed_last_30_days: number;
+  projects_count?: number;
+  active_sprints_count?: number;
+}
+
+export interface VelocitySprint {
+  sprint_id: string;
+  sprint_name: string;
+  planned_points: number;
+  completed_points: number;
+  completion_rate: number;
+}
+
+export interface VelocityData {
+  sprints: VelocitySprint[];
+  average_velocity: number;
+}

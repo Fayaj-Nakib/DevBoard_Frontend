@@ -7,16 +7,17 @@ import type { Label, Milestone, Sprint, TaskTemplate, WorkspaceMember } from '@/
 interface Props {
   workspaceId: string;
   projectId: string;
+  defaultDueDate?: string;
   onClose: () => void;
   onCreate: () => void;
 }
 
-export default function CreateTaskModal({ workspaceId, projectId, onClose, onCreate }: Props) {
+export default function CreateTaskModal({ workspaceId, projectId, defaultDueDate, onClose, onCreate }: Props) {
   const [form, setForm] = useState({
     title: '',
     description: '',
     priority: 'medium',
-    due_date: '',
+    due_date: defaultDueDate ?? '',
     started_at: '',
     estimate: '',
     milestone_id: '',

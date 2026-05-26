@@ -7,6 +7,10 @@ import { useTasks } from '@/hooks/useTasks';
 import { useProjectStatuses } from '@/hooks/useProjectStatuses';
 import KanbanBoard, { ReorderItem } from '@/components/kanban/KanbanBoard';
 import BacklogView from '@/components/BacklogView';
+import TimelineView from '@/components/TimelineView';
+import CalendarView from '@/components/CalendarView';
+import WorkloadView from '@/components/WorkloadView';
+import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import TaskDetailModal from '@/components/TaskDetailModal';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import SprintPanel from '@/components/SprintPanel';
@@ -15,7 +19,16 @@ import BulkActionBar from '@/components/BulkActionBar';
 import NotificationsBell from '@/components/NotificationsBell';
 import type { Task, TaskFilters } from '@/types';
 
-type ViewTab = 'board' | 'backlog';
+type ViewTab = 'board' | 'backlog' | 'timeline' | 'calendar' | 'workload' | 'analytics';
+
+const TABS: { id: ViewTab; label: string }[] = [
+  { id: 'board',     label: 'Board' },
+  { id: 'backlog',   label: 'Backlog' },
+  { id: 'timeline',  label: 'Timeline' },
+  { id: 'calendar',  label: 'Calendar' },
+  { id: 'workload',  label: 'Workload' },
+  { id: 'analytics', label: 'Analytics' },
+];
 
 export default function ProjectPage() {
   const { workspaceId, projectId } = useParams<{ workspaceId: string; projectId: string }>();
@@ -24,6 +37,7 @@ export default function ProjectPage() {
   const { logout, user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<ViewTab>('board');
+  const [createWithDate, setCreateWithDate] = useState<string | undefined>();
 
   // ── Project statuses (for dynamic board columns) ──────────────────────────
   const { statuses } = useProjectStatuses(workspaceId, projectId);
@@ -89,6 +103,7 @@ export default function ProjectPage() {
     }
     setSelectedTaskId(task.id);
   };
+  const handleTaskIdClick = (taskId: string) => setSelectedTaskId(taskId);
 
   // Done-task count from statuses that are is_done, or fall back to 'done' key
   const doneTasks = useMemo(() => {
@@ -102,44 +117,43 @@ export default function ProjectPage() {
 
   const totalTasks = Object.values(tasks).reduce((sum, col) => sum + col.length, 0);
 
+  const handleCalendarCreateDate = (date: string) => {
+    setCreateWithDate(date);
+    setShowCreate(true);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Nav */}
       <nav className="bg-white border-b px-6 py-3.5 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 overflow-x-auto">
           <button
             type="button"
             onClick={() => router.push(`/workspaces/${workspaceId}/projects`)}
-            className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1"
+            className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1 flex-shrink-0"
           >
             ← Projects
           </button>
-          <span className="text-gray-200 text-lg">/</span>
+          <span className="text-gray-200 text-lg flex-shrink-0">/</span>
 
           {/* View tabs */}
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('board')}
-              className={`text-sm px-3 py-1 rounded-lg font-medium transition-colors ${
-                activeTab === 'board' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Board
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('backlog')}
-              className={`text-sm px-3 py-1 rounded-lg font-medium transition-colors ${
-                activeTab === 'backlog' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Backlog
-            </button>
+            {TABS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`text-sm px-3 py-1 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                  activeTab === id ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           {totalTasks > 0 && activeTab === 'board' && (
             <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1">
               <span className="text-green-600 font-semibold">{doneTasks}</span>
@@ -182,9 +196,8 @@ export default function ProjectPage() {
 
       {/* Content */}
       <div className="flex-1 p-6">
-        {activeTab === 'board' ? (
+        {activeTab === 'board' && (
           <>
-            {/* Toolbar */}
             <div className="flex items-center justify-between mb-4">
               <button
                 type="button"
@@ -227,13 +240,48 @@ export default function ProjectPage() {
               />
             )}
           </>
-        ) : (
+        )}
+
+        {activeTab === 'backlog' && (
           <BacklogView
             workspaceId={workspaceId}
             projectId={projectId}
             statuses={statuses}
             onTaskClick={handleTaskClick}
             onRefresh={refresh}
+          />
+        )}
+
+        {activeTab === 'timeline' && (
+          <TimelineView
+            workspaceId={workspaceId}
+            projectId={projectId}
+            onTaskClick={handleTaskIdClick}
+          />
+        )}
+
+        {activeTab === 'calendar' && (
+          <CalendarView
+            workspaceId={workspaceId}
+            projectId={projectId}
+            currentUserId={user?.id}
+            onTaskClick={handleTaskIdClick}
+            onCreateWithDate={handleCalendarCreateDate}
+          />
+        )}
+
+        {activeTab === 'workload' && (
+          <WorkloadView
+            workspaceId={workspaceId}
+            projectId={projectId}
+            onTaskClick={handleTaskIdClick}
+          />
+        )}
+
+        {activeTab === 'analytics' && (
+          <AnalyticsDashboard
+            workspaceId={workspaceId}
+            projectId={projectId}
           />
         )}
       </div>
@@ -252,7 +300,8 @@ export default function ProjectPage() {
         <CreateTaskModal
           workspaceId={workspaceId}
           projectId={projectId}
-          onClose={() => setShowCreate(false)}
+          defaultDueDate={createWithDate}
+          onClose={() => { setShowCreate(false); setCreateWithDate(undefined); }}
           onCreate={refresh}
         />
       )}
