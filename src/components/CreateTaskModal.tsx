@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import type { Label, Milestone, Sprint, WorkspaceMember } from '@/types';
+import type { Label, Milestone, Sprint, TaskTemplate, WorkspaceMember } from '@/types';
 
 interface Props {
   workspaceId: string;
@@ -25,11 +25,13 @@ export default function CreateTaskModal({ workspaceId, projectId, onClose, onCre
 
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [labelIds, setLabelIds] = useState<string[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [allLabels, setAllLabels] = useState<Label[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -39,15 +41,32 @@ export default function CreateTaskModal({ workspaceId, projectId, onClose, onCre
       api.get<Label[]>(`/workspaces/${workspaceId}/labels`),
       api.get<Milestone[]>(`/workspaces/${workspaceId}/projects/${projectId}/milestones`),
       api.get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`),
-    ]).then(([m, l, ms, sp]) => {
+      api.get<TaskTemplate[]>(`/workspaces/${workspaceId}/projects/${projectId}/templates`),
+    ]).then(([m, l, ms, sp, tpl]) => {
       setMembers(m.data);
       setAllLabels(l.data);
       setMilestones(ms.data);
       setSprints(sp.data);
+      setTemplates(tpl.data);
     });
   }, [workspaceId, projectId]);
 
-  const submit = async (e: React.FormEvent) => {
+  const applyTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (!templateId) return;
+    const tpl = templates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    setForm((f) => ({
+      ...f,
+      title: tpl.default_title ?? f.title,
+      description: tpl.description ?? f.description,
+      priority: tpl.priority ?? f.priority,
+      estimate: tpl.estimate != null ? String(tpl.estimate) : f.estimate,
+    }));
+    if (tpl.label_ids?.length) setLabelIds(tpl.label_ids);
+  };
+
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!form.title.trim()) { setError('Title is required.'); return; }
     setSaving(true);
@@ -62,6 +81,7 @@ export default function CreateTaskModal({ workspaceId, projectId, onClose, onCre
         started_at: form.started_at || null,
         assignee_ids: assigneeIds,
         label_ids: labelIds,
+        template_id: selectedTemplateId || null,
       });
       onCreate();
       onClose();
@@ -95,6 +115,25 @@ export default function CreateTaskModal({ workspaceId, projectId, onClose, onCre
 
         <form onSubmit={submit} className="p-6 space-y-4">
           {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+
+          {/* Template picker */}
+          {templates.length > 0 && (
+            <div>
+              <label htmlFor="ct-template" className="block text-xs text-gray-500 font-medium mb-1">Use template (optional)</label>
+              <select
+                id="ct-template"
+                title="Task template"
+                value={selectedTemplateId}
+                onChange={(e) => applyTemplate(e.target.value)}
+                className="w-full border rounded-lg px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">— No template —</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Title */}
           <div>

@@ -78,12 +78,36 @@ export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
 export type RecurrenceRule = 'daily' | 'weekly' | 'weekday' | 'monthly';
 
+export interface ProjectStatus {
+  id: string;
+  project_id: string;
+  name: string;
+  color: string;
+  position: number;
+  is_default: boolean;
+  is_done: boolean;
+  slug: string | null;
+}
+
+export interface TaskTemplate {
+  id: string;
+  project_id: string;
+  name: string;
+  default_title?: string;
+  description?: string;
+  label_ids?: string[];
+  estimate?: number;
+  checklist?: { title: string; done?: boolean }[];
+  priority: TaskPriority;
+}
+
 export interface Task {
   id: string;
   project_id: string;
   parent_id?: string;
   milestone_id?: string;
   sprint_id?: string;
+  project_status_id?: string | null;
   recurrence_parent_id?: string | null;
   title: string;
   description?: string;
@@ -93,6 +117,8 @@ export interface Task {
   due_date?: string;
   started_at?: string;
   estimate?: number;
+  is_backlog?: boolean;
+  backlog_position?: number | null;
   recurrence_rule?: RecurrenceRule | null;
   recurrence_ends_at?: string | null;
   assignees: User[];
@@ -104,6 +130,7 @@ export interface Task {
   children?: Task[];
   milestone?: Milestone;
   sprint?: Sprint;
+  project_status?: ProjectStatus;
 }
 
 export interface TaskFilters {

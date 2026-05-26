@@ -4,7 +4,9 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useTasks } from '@/hooks/useTasks';
+import { useProjectStatuses } from '@/hooks/useProjectStatuses';
 import KanbanBoard, { ReorderItem } from '@/components/kanban/KanbanBoard';
+import BacklogView from '@/components/BacklogView';
 import TaskDetailModal from '@/components/TaskDetailModal';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import SprintPanel from '@/components/SprintPanel';
@@ -13,11 +15,18 @@ import BulkActionBar from '@/components/BulkActionBar';
 import NotificationsBell from '@/components/NotificationsBell';
 import type { Task, TaskFilters } from '@/types';
 
+type ViewTab = 'board' | 'backlog';
+
 export default function ProjectPage() {
   const { workspaceId, projectId } = useParams<{ workspaceId: string; projectId: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { logout, user } = useAuth();
+
+  const [activeTab, setActiveTab] = useState<ViewTab>('board');
+
+  // ── Project statuses (for dynamic board columns) ──────────────────────────
+  const { statuses } = useProjectStatuses(workspaceId, projectId);
 
   // ── Derive filters from URL params ───────────────────────────────────────
   const filters = useMemo<TaskFilters>(() => ({
@@ -34,7 +43,6 @@ export default function ProjectPage() {
     sort_dir:       (searchParams.get('sort_dir') as TaskFilters['sort_dir']) ?? undefined,
   }), [searchParams]);
 
-  // Write filter changes back to the URL
   const handleFilterChange = useCallback((newFilters: TaskFilters) => {
     const p = new URLSearchParams();
     newFilters.label_ids?.forEach((id) => p.append('label_ids[]', id));
@@ -75,7 +83,6 @@ export default function ProjectPage() {
 
   const handleReorder = (items: ReorderItem[]) => reorder(items);
   const handleTaskClick = (task: Task) => {
-    // If any task is selected, toggle selection instead of opening modal
     if (selectedIds.size > 0) {
       toggleSelectTask(task.id);
       return;
@@ -83,8 +90,17 @@ export default function ProjectPage() {
     setSelectedTaskId(task.id);
   };
 
+  // Done-task count from statuses that are is_done, or fall back to 'done' key
+  const doneTasks = useMemo(() => {
+    if (statuses.length > 0) {
+      return statuses
+        .filter((s) => s.is_done)
+        .reduce((sum, s) => sum + (tasks[s.id]?.length ?? 0), 0);
+    }
+    return tasks['done']?.length ?? 0;
+  }, [statuses, tasks]);
+
   const totalTasks = Object.values(tasks).reduce((sum, col) => sum + col.length, 0);
-  const doneTasks = tasks['done']?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -99,11 +115,32 @@ export default function ProjectPage() {
             ← Projects
           </button>
           <span className="text-gray-200 text-lg">/</span>
-          <h1 className="text-sm font-semibold text-gray-800">Board</h1>
+
+          {/* View tabs */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('board')}
+              className={`text-sm px-3 py-1 rounded-lg font-medium transition-colors ${
+                activeTab === 'board' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Board
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('backlog')}
+              className={`text-sm px-3 py-1 rounded-lg font-medium transition-colors ${
+                activeTab === 'backlog' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Backlog
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
-          {totalTasks > 0 && (
+          {totalTasks > 0 && activeTab === 'board' && (
             <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1">
               <span className="text-green-600 font-semibold">{doneTasks}</span>
               <span>/ {totalTasks} done</span>
@@ -126,6 +163,15 @@ export default function ProjectPage() {
             <span>🏷</span> Labels
           </button>
 
+          <button
+            type="button"
+            onClick={() => router.push(`/workspaces/${workspaceId}/projects/${projectId}/settings`)}
+            className="text-sm text-gray-600 border rounded-lg px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1.5"
+            title="Project settings"
+          >
+            ⚙️
+          </button>
+
           <NotificationsBell />
           <span className="text-sm text-gray-500 hidden sm:block">{user?.name}</span>
           <button type="button" onClick={logout} className="text-sm text-red-400 hover:text-red-600">
@@ -134,53 +180,64 @@ export default function ProjectPage() {
         </div>
       </nav>
 
-      {/* Board */}
+      {/* Content */}
       <div className="flex-1 p-6">
-        {/* Toolbar */}
-        <div className="flex items-center justify-between mb-4">
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center gap-1.5"
-          >
-            + New Task
-          </button>
+        {activeTab === 'board' ? (
+          <>
+            {/* Toolbar */}
+            <div className="flex items-center justify-between mb-4">
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center gap-1.5"
+              >
+                + New Task
+              </button>
 
-          {selectedIds.size > 0 && (
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              Cancel selection ({selectedIds.size})
-            </button>
-          )}
-        </div>
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Cancel selection ({selectedIds.size})
+                </button>
+              )}
+            </div>
 
-        {/* Filter bar */}
-        <FilterBar
-          workspaceId={workspaceId}
-          projectId={projectId}
-          filters={filters}
-          onChange={handleFilterChange}
-        />
+            <FilterBar
+              workspaceId={workspaceId}
+              projectId={projectId}
+              filters={filters}
+              onChange={handleFilterChange}
+            />
 
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <p className="text-gray-400 text-sm">Loading tasks…</p>
-          </div>
+            {loading ? (
+              <div className="flex items-center justify-center h-64">
+                <p className="text-gray-400 text-sm">Loading tasks…</p>
+              </div>
+            ) : (
+              <KanbanBoard
+                tasks={tasks}
+                columns={statuses.length > 0 ? statuses : undefined}
+                onReorder={handleReorder}
+                onTaskClick={handleTaskClick}
+                selectedIds={selectedIds}
+                onSelectTask={toggleSelectTask}
+              />
+            )}
+          </>
         ) : (
-          <KanbanBoard
-            tasks={tasks}
-            onReorder={handleReorder}
+          <BacklogView
+            workspaceId={workspaceId}
+            projectId={projectId}
+            statuses={statuses}
             onTaskClick={handleTaskClick}
-            selectedIds={selectedIds}
-            onSelectTask={toggleSelectTask}
+            onRefresh={refresh}
           />
         )}
       </div>
 
-      {/* Task detail modal */}
       {selectedTaskId && (
         <TaskDetailModal
           taskId={selectedTaskId}
@@ -191,7 +248,6 @@ export default function ProjectPage() {
         />
       )}
 
-      {/* Create task modal */}
       {showCreate && (
         <CreateTaskModal
           workspaceId={workspaceId}
@@ -201,7 +257,6 @@ export default function ProjectPage() {
         />
       )}
 
-      {/* Sprint panel */}
       {showSprints && (
         <SprintPanel
           workspaceId={workspaceId}
@@ -210,7 +265,6 @@ export default function ProjectPage() {
         />
       )}
 
-      {/* Floating bulk action bar */}
       <BulkActionBar
         selectedIds={[...selectedIds]}
         workspaceId={workspaceId}

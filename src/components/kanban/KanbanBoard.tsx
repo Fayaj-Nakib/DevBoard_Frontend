@@ -2,31 +2,32 @@
 
 import { useEffect, useState } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import type { Task } from '@/types';
+import type { ProjectStatus, Task } from '@/types';
 
 export type { Task };
 
 export interface ReorderItem {
   id: string;
   status: string;
+  project_status_id?: string;
   position: number;
 }
 
-const COLUMNS = ['todo', 'in_progress', 'in_review', 'done'] as const;
-type Column = (typeof COLUMNS)[number];
+const DEFAULT_COLUMNS = ['todo', 'in_progress', 'in_review', 'done'] as const;
+type DefaultColumn = (typeof DEFAULT_COLUMNS)[number];
 
-const COLUMN_LABELS: Record<Column, string> = {
+const DEFAULT_LABELS: Record<DefaultColumn, string> = {
   todo: 'To Do',
   in_progress: 'In Progress',
   in_review: 'In Review',
   done: 'Done',
 };
 
-const COLUMN_ACCENT: Record<Column, string> = {
-  todo: 'border-t-gray-400',
-  in_progress: 'border-t-blue-500',
-  in_review: 'border-t-purple-500',
-  done: 'border-t-green-500',
+const DEFAULT_COLORS: Record<DefaultColumn, string> = {
+  todo: '#9CA3AF',
+  in_progress: '#3B82F6',
+  in_review: '#8B5CF6',
+  done: '#10B981',
 };
 
 const PRIORITY_BADGE: Record<string, string> = {
@@ -43,6 +44,7 @@ const PRIORITY_DOT: Record<string, string> = {
 
 interface Props {
   tasks: Record<string, Task[]>;
+  columns?: ProjectStatus[];
   onReorder: (items: ReorderItem[]) => Promise<void>;
   onTaskClick: (task: Task) => void;
   selectedIds?: Set<string>;
@@ -69,7 +71,6 @@ function TaskCard({
   const subtasks = task.children ?? [];
   const doneSubs = subtasks.filter((s) => s.status === 'done').length;
   const hasSubs = subtasks.length > 0;
-
   const isOverdue = task.due_date && task.status !== 'done' && new Date(task.due_date) < new Date();
 
   return (
@@ -83,7 +84,6 @@ function TaskCard({
           : 'shadow-sm hover:shadow-md hover:border-blue-200'
       }`}
     >
-      {/* Checkbox — visible on hover or when selected */}
       {onSelect && (
         <div className="flex items-start gap-2 mb-1">
           <button
@@ -100,13 +100,12 @@ function TaskCard({
           </button>
         </div>
       )}
-      {/* Priority dot + title */}
+
       <div className="flex items-start gap-2 mb-2">
         <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${PRIORITY_DOT[task.priority] ?? 'bg-gray-300'}`} />
         <p className="font-medium text-gray-800 leading-snug flex-1">{task.title}</p>
       </div>
 
-      {/* Labels */}
       {task.labels && task.labels.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
           {task.labels.slice(0, 3).map((l) => (
@@ -124,7 +123,6 @@ function TaskCard({
         </div>
       )}
 
-      {/* Sub-task progress bar */}
       {hasSubs && (
         <div className="mb-2">
           <div className="flex justify-between text-xs text-gray-400 mb-0.5">
@@ -139,7 +137,6 @@ function TaskCard({
         </div>
       )}
 
-      {/* Footer: priority badge + due date + assignees */}
       <div className="flex items-center justify-between gap-2 mt-2">
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${PRIORITY_BADGE[task.priority] ?? ''}`}>
           {task.priority}
@@ -169,8 +166,7 @@ function TaskCard({
         </div>
       </div>
 
-      {/* Bottom indicators */}
-      {(task.recurrence_rule || (task.attachments && task.attachments.length > 0)) && (
+      {(task.recurrence_rule || (task.attachments && task.attachments.length > 0) || task.is_backlog) && (
         <div className="flex items-center gap-2 mt-1.5">
           {task.recurrence_rule && (
             <span className="text-xs text-gray-400" title={`Repeats ${task.recurrence_rule}`}>🔁</span>
@@ -178,18 +174,26 @@ function TaskCard({
           {task.attachments && task.attachments.length > 0 && (
             <span className="text-xs text-gray-400">📎 {task.attachments.length}</span>
           )}
+          {task.is_backlog && (
+            <span className="text-xs text-orange-400" title="In backlog">📋</span>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export default function KanbanBoard({ tasks, onReorder, onTaskClick, selectedIds, onSelectTask }: Props) {
+export default function KanbanBoard({ tasks, columns, onReorder, onTaskClick, selectedIds, onSelectTask }: Props) {
   const [localTasks, setLocalTasks] = useState<Record<string, Task[]>>(tasks);
 
   useEffect(() => {
     setLocalTasks(tasks);
   }, [tasks]);
+
+  // Build column definitions — dynamic if provided, otherwise hardcoded defaults
+  const colDefs: { id: string; label: string; color: string }[] = columns && columns.length > 0
+    ? columns.map((s) => ({ id: s.id, label: s.name, color: s.color }))
+    : DEFAULT_COLUMNS.map((c) => ({ id: c, label: DEFAULT_LABELS[c], color: DEFAULT_COLORS[c] }));
 
   const handleDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
@@ -197,38 +201,53 @@ export default function KanbanBoard({ tasks, onReorder, onTaskClick, selectedIds
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
     const newTasks: Record<string, Task[]> = {};
-    COLUMNS.forEach((col) => { newTasks[col] = [...(localTasks[col] ?? [])]; });
+    colDefs.forEach(({ id }) => { newTasks[id] = [...(localTasks[id] ?? [])]; });
 
     const [movedTask] = newTasks[source.droppableId].splice(source.index, 1);
+    const destStatus = columns
+      ? (columns.find((s) => s.id === destination.droppableId)?.slug as Task['status'] ?? movedTask.status)
+      : destination.droppableId as Task['status'];
+
     newTasks[destination.droppableId].splice(destination.index, 0, {
       ...movedTask,
-      status: destination.droppableId as Column,
+      project_status_id: columns ? destination.droppableId : movedTask.project_status_id,
+      status: destStatus,
     });
 
     setLocalTasks(newTasks);
 
-    const reorderItems: ReorderItem[] = COLUMNS.flatMap((col) =>
-      newTasks[col].map((t, idx) => ({ id: t.id, status: col, position: idx + 1 }))
+    const reorderItems: ReorderItem[] = colDefs.flatMap(({ id }) =>
+      (newTasks[id] ?? []).map((t, idx) => ({
+        id: t.id,
+        status: columns
+          ? (columns.find((s) => s.id === id)?.slug ?? 'todo')
+          : id,
+        project_status_id: columns ? id : undefined,
+        position: idx + 1,
+      }))
     );
+
     await onReorder(reorderItems);
   };
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-4 gap-4">
-        {COLUMNS.map((col) => (
+      <div className="flex gap-4 overflow-x-auto pb-2">
+        {colDefs.map((col) => (
           <div
-            key={col}
-            className={`flex flex-col bg-gray-50 rounded-xl border-t-2 ${COLUMN_ACCENT[col]} min-h-96`}
+            key={col.id}
+            /* eslint-disable-next-line react/forbid-dom-props */
+            style={{ '--col-accent': col.color } as React.CSSProperties}
+            className="flex flex-col bg-gray-50 rounded-xl min-w-64 w-64 flex-shrink-0 border-t-2 [border-top-color:var(--col-accent)]"
           >
             <div className="flex items-center justify-between px-3 pt-3 pb-2">
-              <h3 className="text-sm font-semibold text-gray-600">{COLUMN_LABELS[col]}</h3>
+              <h3 className="text-sm font-semibold text-gray-600">{col.label}</h3>
               <span className="text-xs bg-white border text-gray-500 rounded-full px-2 py-0.5 font-medium">
-                {localTasks[col]?.length ?? 0}
+                {localTasks[col.id]?.length ?? 0}
               </span>
             </div>
 
-            <Droppable droppableId={col}>
+            <Droppable droppableId={col.id}>
               {(provided, snapshot) => (
                 <div
                   ref={provided.innerRef}
@@ -237,7 +256,7 @@ export default function KanbanBoard({ tasks, onReorder, onTaskClick, selectedIds
                     snapshot.isDraggingOver ? 'bg-blue-50' : ''
                   }`}
                 >
-                  {(localTasks[col] ?? []).map((task, index) => (
+                  {(localTasks[col.id] ?? []).map((task, index) => (
                     <Draggable key={task.id} draggableId={task.id} index={index}>
                       {(provided, snapshot) => (
                         <div

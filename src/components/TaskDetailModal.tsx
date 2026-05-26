@@ -65,7 +65,14 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-type ActiveTab = 'subtasks' | 'attachments';
+type ActiveTab = 'subtasks' | 'attachments' | 'dependencies';
+
+interface DependencyItem {
+  id: string;
+  title: string;
+  status: string;
+  type: string;
+}
 
 export default function TaskDetailModal({ taskId, workspaceId, projectId, onClose, onUpdate }: Props) {
   const { user } = useAuth();
@@ -113,9 +120,68 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
   const [recurrenceEndsAt, setRecurrenceEndsAt] = useState('');
   const [savingRecurrence, setSavingRecurrence] = useState(false);
 
+  // Dependencies
+  const [deps, setDeps] = useState<{ blocked_by: DependencyItem[]; blocking: DependencyItem[] }>({ blocked_by: [], blocking: [] });
+  const [depSearch, setDepSearch] = useState('');
+  const [depType, setDepType] = useState('is_blocked_by');
+  const [depCandidates, setDepCandidates] = useState<{ id: string; title: string; status: string }[]>([]);
+  const [addingDep, setAddingDep] = useState(false);
+
+  // Backlog
+  const [togglingBacklog, setTogglingBacklog] = useState(false);
+
   // Pickers
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
+
+  const fetchDeps = useCallback(() => {
+    api.get<{ blocked_by: DependencyItem[]; blocking: DependencyItem[] }>(`/tasks/${taskId}/dependencies`)
+      .then((r) => setDeps(r.data));
+  }, [taskId]);
+
+  const searchDepCandidates = useCallback((q: string) => {
+    setDepSearch(q);
+    if (!q.trim()) { setDepCandidates([]); return; }
+    api.get<Record<string, { id: string; title: string; status: string }[]>>(
+      `/workspaces/${workspaceId}/projects/${projectId}/tasks`,
+    ).then((r) => {
+      const all = Object.values(r.data).flat();
+      setDepCandidates(
+        all.filter(
+          (t) => t.id !== taskId && t.title.toLowerCase().includes(q.toLowerCase()),
+        ).slice(0, 8),
+      );
+    });
+  }, [taskId, workspaceId, projectId]);
+
+  const addDep = async (dependsOnId: string) => {
+    setAddingDep(true);
+    try {
+      await api.post(`/tasks/${taskId}/dependencies`, { depends_on_id: dependsOnId, type: depType });
+      setDepSearch('');
+      setDepCandidates([]);
+      fetchDeps();
+    } finally {
+      setAddingDep(false);
+    }
+  };
+
+  const removeDep = async (dependencyId: string) => {
+    await api.delete(`/tasks/${taskId}/dependencies/${dependencyId}`);
+    fetchDeps();
+  };
+
+  const toggleBacklog = async () => {
+    if (!task) return;
+    setTogglingBacklog(true);
+    try {
+      await api.patch(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task.id}/backlog-toggle`);
+      fetchTask();
+      onUpdate();
+    } finally {
+      setTogglingBacklog(false);
+    }
+  };
 
   const fetchTask = useCallback(() => {
     api.get<Task>(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`)
@@ -143,11 +209,12 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
 
   useEffect(() => {
     fetchTask();
+    fetchDeps();
     api.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`).then((r) => setMembers(r.data));
     api.get<Label[]>(`/workspaces/${workspaceId}/labels`).then((r) => setAllLabels(r.data));
     api.get<Milestone[]>(`/workspaces/${workspaceId}/projects/${projectId}/milestones`).then((r) => setMilestones(r.data));
     api.get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`).then((r) => setSprints(r.data));
-  }, [taskId, workspaceId, projectId, fetchTask]);
+  }, [taskId, workspaceId, projectId, fetchTask, fetchDeps]);
 
   const save = async () => {
     setSaving(true);
@@ -216,7 +283,7 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
     fetchTask();
   };
 
-  const addComment = async (e: React.FormEvent) => {
+  const addComment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newComment.trim()) return;
     setAddingComment(true);
@@ -234,7 +301,7 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
     fetchTask();
   };
 
-  const addSubtask = async (e: React.FormEvent) => {
+  const addSubtask = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newSubtask.trim()) return;
     setAddingSubtask(true);
@@ -397,7 +464,11 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
             {/* Tabs: Sub-tasks / Attachments */}
             <div>
               <div className="flex gap-1 border-b mb-4">
-                {(['subtasks', 'attachments'] as ActiveTab[]).map((tab) => (
+                {([
+                  ['subtasks', subtasks.length > 0 ? `Sub-tasks (${doneSubs}/${subtasks.length})` : 'Sub-tasks'],
+                  ['attachments', `Attachments${task.attachments?.length ? ` (${task.attachments.length})` : ''}`],
+                  ['dependencies', `Dependencies${(deps.blocked_by.length + deps.blocking.length) > 0 ? ` (${deps.blocked_by.length + deps.blocking.length})` : ''}`],
+                ] as [ActiveTab, string][]).map(([tab, label]) => (
                   <button
                     key={tab}
                     type="button"
@@ -408,9 +479,7 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                         : 'border-transparent text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    {tab === 'subtasks'
-                      ? `Sub-tasks${subtasks.length > 0 ? ` (${doneSubs}/${subtasks.length})` : ''}`
-                      : `Attachments${task.attachments?.length ? ` (${task.attachments.length})` : ''}`}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -479,6 +548,89 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
                       {addingSubtask ? '…' : '+ Add'}
                     </button>
                   </form>
+                </div>
+              )}
+
+              {activeTab === 'dependencies' && (
+                <div className="space-y-4">
+                  {/* Blocked by */}
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase font-medium mb-2">Blocked by</p>
+                    {deps.blocked_by.length === 0
+                      ? <p className="text-sm text-gray-400 italic">None</p>
+                      : deps.blocked_by.map((d) => (
+                        <div key={d.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 group">
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${d.status === 'done' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {d.status.replace('_', ' ')}
+                          </span>
+                          <span className="text-sm text-gray-700 flex-1 truncate">{d.title}</span>
+                          <span className="text-xs text-gray-400">{d.type}</span>
+                          <button type="button" onClick={() => removeDep(d.id)} className="text-xs text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100">✕</button>
+                        </div>
+                      ))
+                    }
+                  </div>
+
+                  {/* Blocking */}
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase font-medium mb-2">Blocking</p>
+                    {deps.blocking.length === 0
+                      ? <p className="text-sm text-gray-400 italic">None</p>
+                      : deps.blocking.map((d) => (
+                        <div key={d.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50">
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${d.status === 'done' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {d.status.replace('_', ' ')}
+                          </span>
+                          <span className="text-sm text-gray-700 flex-1 truncate">{d.title}</span>
+                          <span className="text-xs text-gray-400">{d.type}</span>
+                        </div>
+                      ))
+                    }
+                  </div>
+
+                  {/* Add dependency */}
+                  <div className="border-t pt-3">
+                    <p className="text-xs text-gray-400 uppercase font-medium mb-2">Add dependency</p>
+                    <div className="flex gap-2 mb-2">
+                      <select
+                        title="Dependency type"
+                        value={depType}
+                        onChange={(e) => setDepType(e.target.value)}
+                        className="border rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        <option value="is_blocked_by">Is blocked by</option>
+                        <option value="blocks">Blocks</option>
+                        <option value="relates_to">Relates to</option>
+                        <option value="duplicates">Duplicates</option>
+                      </select>
+                      <div className="relative flex-1">
+                        <input
+                          title="Search tasks"
+                          type="text"
+                          value={depSearch}
+                          onChange={(e) => searchDepCandidates(e.target.value)}
+                          placeholder="Search tasks by title…"
+                          className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {depCandidates.length > 0 && (
+                          <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl z-30 w-full max-h-48 overflow-y-auto">
+                            {depCandidates.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                disabled={addingDep}
+                                onClick={() => addDep(c.id)}
+                                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-50 text-left"
+                              >
+                                <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{c.status.replace('_', ' ')}</span>
+                                <span className="text-gray-700 truncate">{c.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -729,6 +881,23 @@ export default function TaskDetailModal({ taskId, workspaceId, projectId, onClos
               ) : (
                 <p className="text-sm text-gray-700">{task.sprint?.name ?? 'Backlog'}</p>
               )}
+            </div>
+
+            {/* Backlog */}
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-medium mb-1.5">Backlog</p>
+              <button
+                type="button"
+                onClick={toggleBacklog}
+                disabled={togglingBacklog}
+                className={`w-full text-xs rounded-lg px-3 py-1.5 border font-medium transition-colors disabled:opacity-50 ${
+                  task.is_backlog
+                    ? 'bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100'
+                    : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                {task.is_backlog ? '📋 In backlog — remove' : '+ Add to backlog'}
+              </button>
             </div>
 
             {/* Recurrence */}
