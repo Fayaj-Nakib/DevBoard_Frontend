@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Layers,
   BarChart3,
+  Home,
 } from 'lucide-react';
 
 interface NavItem {
@@ -19,14 +20,15 @@ interface NavItem {
   icon: React.ElementType;
   href: (workspaceId: string) => string;
   matchSegment?: string;
+  exactMatch?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   {
-    label: 'Workspaces',
-    icon: LayoutDashboard,
-    href: () => '/workspaces',
-    matchSegment: '/workspaces',
+    label: 'Home',
+    icon: Home,
+    href: (id) => `/workspaces/${id}/dashboard`,
+    matchSegment: '/dashboard',
   },
   {
     label: 'Projects',
