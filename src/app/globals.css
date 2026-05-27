@@ -1,26 +1,266 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Dark mode via .dark class (next-themes uses class strategy) */
+@custom-variant dark (&:is(.dark *));
 
+/* ─── Map ALL CSS variables → Tailwind utility classes ─────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* Standard shadcn tokens */
+  --color-background:           hsl(var(--background));
+  --color-foreground:           hsl(var(--foreground));
+  --color-card:                 hsl(var(--card));
+  --color-card-foreground:      hsl(var(--card-foreground));
+  --color-popover:              hsl(var(--popover));
+  --color-popover-foreground:   hsl(var(--popover-foreground));
+  --color-primary:              hsl(var(--primary));
+  --color-primary-foreground:   hsl(var(--primary-foreground));
+  --color-secondary:            hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted:                hsl(var(--muted));
+  --color-muted-foreground:     hsl(var(--muted-foreground));
+  --color-accent:               hsl(var(--accent));
+  --color-accent-foreground:    hsl(var(--accent-foreground));
+  --color-destructive:          hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border:               hsl(var(--border));
+  --color-input:                hsl(var(--input));
+  --color-ring:                 hsl(var(--ring));
+
+  /* Extended design system tokens */
+  --color-background-secondary:      hsl(var(--background-secondary));
+  --color-background-tertiary:       hsl(var(--background-tertiary));
+  --color-foreground-secondary:      hsl(var(--foreground-secondary));
+  --color-foreground-tertiary:       hsl(var(--foreground-tertiary));
+  --color-foreground-muted:          hsl(var(--foreground-muted));
+  --color-border-strong:             hsl(var(--border-strong));
+  --color-primary-hover:             hsl(var(--primary-hover));
+  --color-primary-subtle:            hsl(var(--primary-subtle));
+  --color-primary-subtle-foreground: hsl(var(--primary-subtle-foreground));
+  --color-success:                   hsl(var(--success));
+  --color-success-foreground:        hsl(var(--success-foreground));
+  --color-success-subtle:            hsl(var(--success-subtle));
+  --color-warning:                   hsl(var(--warning));
+  --color-warning-foreground:        hsl(var(--warning-foreground));
+  --color-warning-subtle:            hsl(var(--warning-subtle));
+  --color-destructive-subtle:        hsl(var(--destructive-subtle));
+
+  /* Sidebar & top nav surfaces */
+  --color-sidebar:                   hsl(var(--sidebar));
+  --color-sidebar-foreground:        hsl(var(--sidebar-foreground));
+  --color-sidebar-border:            hsl(var(--sidebar-border));
+  --color-sidebar-accent:            hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-topnav:                    hsl(var(--topnav));
+  --color-topnav-border:             hsl(var(--topnav-border));
+
+  /* Charts */
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  /* Typography */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Radius scale */
+  --radius-sm:  calc(var(--radius) * 0.5);
+  --radius-md:  var(--radius);
+  --radius-lg:  calc(var(--radius) * 1.5);
+  --radius-xl:  calc(var(--radius) * 2);
+  --radius-2xl: calc(var(--radius) * 3);
+
+  /* Custom animations */
+  --animate-fade-in:        fadeIn 0.15s ease-out;
+  --animate-slide-up:       slideUp 0.15s ease-out;
+  --animate-slide-in-right: slideInRight 0.2s ease-out;
 }
 
-@media (prefers-color-scheme: dark) {
+/* ─── CSS custom property definitions ───────────────────────────────────────── */
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Backgrounds */
+    --background:           0 0% 100%;
+    --background-secondary: 240 5% 96%;
+    --background-tertiary:  240 6% 92%;
+
+    /* Text */
+    --foreground:           240 10% 4%;
+    --foreground-secondary: 240 4% 36%;
+    --foreground-tertiary:  240 4% 54%;
+    --foreground-muted:     240 4% 70%;
+
+    /* Card / popover */
+    --card:                 0 0% 100%;
+    --card-foreground:      240 10% 4%;
+    --popover:              0 0% 100%;
+    --popover-foreground:   240 10% 4%;
+
+    /* Primary — Violet (Linear-inspired) */
+    --primary:                     262 83% 58%;
+    --primary-foreground:          0 0% 100%;
+    --primary-hover:               262 83% 52%;
+    --primary-subtle:              262 83% 97%;
+    --primary-subtle-foreground:   262 83% 40%;
+
+    /* Secondary */
+    --secondary:            240 5% 94%;
+    --secondary-foreground: 240 6% 10%;
+
+    /* Muted */
+    --muted:                240 5% 96%;
+    --muted-foreground:     240 4% 54%;
+
+    /* Accent */
+    --accent:               240 5% 94%;
+    --accent-foreground:    240 6% 10%;
+
+    /* Semantic */
+    --destructive:          0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-subtle:   0 84% 97%;
+
+    --success:              142 71% 45%;
+    --success-foreground:   0 0% 100%;
+    --success-subtle:       142 71% 96%;
+
+    --warning:              38 92% 50%;
+    --warning-foreground:   0 0% 100%;
+    --warning-subtle:       38 92% 96%;
+
+    /* Borders */
+    --border:               240 6% 90%;
+    --border-strong:        240 6% 82%;
+    --input:                240 6% 90%;
+    --ring:                 262 83% 58%;
+
+    /* Sidebar */
+    --sidebar:                   240 6% 98%;
+    --sidebar-foreground:        240 10% 4%;
+    --sidebar-border:            240 6% 92%;
+    --sidebar-accent:            240 5% 94%;
+    --sidebar-accent-foreground: 240 6% 10%;
+
+    /* Top nav */
+    --topnav:        0 0% 100%;
+    --topnav-border: 240 6% 90%;
+
+    /* Charts */
+    --chart-1: 262 83% 58%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 199 89% 48%;
+    --chart-5: 0 84% 60%;
+
+    /* Radius */
+    --radius: 0.5rem;
   }
+
+  .dark {
+    /* Backgrounds */
+    --background:           240 6% 7%;
+    --background-secondary: 240 5% 10%;
+    --background-tertiary:  240 4% 13%;
+
+    /* Text */
+    --foreground:           0 0% 95%;
+    --foreground-secondary: 240 4% 68%;
+    --foreground-tertiary:  240 4% 50%;
+    --foreground-muted:     240 4% 36%;
+
+    /* Card / popover */
+    --card:               240 5% 10%;
+    --card-foreground:    0 0% 95%;
+    --popover:            240 5% 11%;
+    --popover-foreground: 0 0% 95%;
+
+    /* Primary */
+    --primary:                   262 83% 65%;
+    --primary-foreground:        0 0% 100%;
+    --primary-hover:             262 83% 70%;
+    --primary-subtle:            262 83% 14%;
+    --primary-subtle-foreground: 262 83% 75%;
+
+    /* Secondary */
+    --secondary:            240 4% 14%;
+    --secondary-foreground: 0 0% 90%;
+
+    /* Muted */
+    --muted:            240 4% 14%;
+    --muted-foreground: 240 4% 50%;
+
+    /* Accent */
+    --accent:            240 4% 14%;
+    --accent-foreground: 0 0% 90%;
+
+    /* Semantic */
+    --destructive:          0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-subtle:   0 72% 12%;
+
+    --success:         142 71% 40%;
+    --success-foreground: 0 0% 100%;
+    --success-subtle:  142 71% 10%;
+
+    --warning:         38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --warning-subtle:  38 92% 11%;
+
+    /* Borders */
+    --border:       240 4% 17%;
+    --border-strong: 240 4% 22%;
+    --input:        240 4% 17%;
+    --ring:         262 83% 65%;
+
+    /* Sidebar */
+    --sidebar:                   240 6% 8%;
+    --sidebar-foreground:        0 0% 90%;
+    --sidebar-border:            240 4% 13%;
+    --sidebar-accent:            240 4% 12%;
+    --sidebar-accent-foreground: 0 0% 90%;
+
+    /* Top nav */
+    --topnav:        240 6% 8%;
+    --topnav-border: 240 4% 13%;
+
+    /* Charts */
+    --chart-1: 262 83% 65%;
+    --chart-2: 142 71% 40%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 199 89% 48%;
+    --chart-5: 0 72% 51%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Minimal scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-border-strong; }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ─── Keyframes for custom animations ───────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(4px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(8px); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
 }
