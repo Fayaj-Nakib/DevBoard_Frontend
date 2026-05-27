@@ -1,88 +1,156 @@
 'use client';
 
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  LayoutGrid, List, GanttChart, CalendarDays, Layers,
+  BarChart3, UserPlus, MoreHorizontal, Settings, Trash2,
+  Link2, Filter, X, Search, Check, Zap, Plus,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjectStatuses } from '@/hooks/useProjectStatuses';
 import { useEcho } from '@/hooks/useEcho';
+import api from '@/lib/api';
+import { cn, initials, avatarBg } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import KanbanBoard, { ReorderItem } from '@/components/kanban/KanbanBoard';
 import BacklogView from '@/components/BacklogView';
 import TimelineView from '@/components/TimelineView';
 import CalendarView from '@/components/CalendarView';
-import WorkloadView from '@/components/WorkloadView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import TaskDetailModal from '@/components/TaskDetailModal';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import SprintPanel from '@/components/SprintPanel';
-import FilterBar from '@/components/FilterBar';
 import BulkActionBar from '@/components/BulkActionBar';
-import NotificationsBell from '@/components/NotificationsBell';
 import CommandPalette from '@/components/CommandPalette';
-import type { Task, TaskFilters } from '@/types';
+import type { Project, ProjectMember, Sprint, Task, TaskFilters } from '@/types';
 
-type ViewTab = 'board' | 'backlog' | 'timeline' | 'calendar' | 'workload' | 'analytics';
+/* ─── Types ─────────────────────────────────────────────────────────────────── */
+type ViewTab = 'board' | 'list' | 'timeline' | 'calendar' | 'backlog' | 'analytics';
 
-const TABS: { id: ViewTab; label: string; icon: string }[] = [
-  { id: 'board',     label: 'Board',     icon: '▦' },
-  { id: 'backlog',   label: 'Backlog',   icon: '☰' },
-  { id: 'timeline',  label: 'Timeline',  icon: '⟶' },
-  { id: 'calendar',  label: 'Calendar',  icon: '◫' },
-  { id: 'workload',  label: 'Workload',  icon: '◎' },
-  { id: 'analytics', label: 'Analytics', icon: '↗' },
+interface ViewDef {
+  id: ViewTab;
+  label: string;
+  icon: React.ElementType;
+}
+
+const VIEWS: ViewDef[] = [
+  { id: 'board',     label: 'Board',     icon: LayoutGrid  },
+  { id: 'list',      label: 'List',      icon: List        },
+  { id: 'timeline',  label: 'Timeline',  icon: GanttChart  },
+  { id: 'calendar',  label: 'Calendar',  icon: CalendarDays },
+  { id: 'backlog',   label: 'Backlog',   icon: Layers      },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3   },
 ];
 
+/* ─── Main page — wraps in Suspense for useSearchParams ─────────────────────── */
 export default function ProjectPage() {
+  return (
+    <Suspense>
+      <ProjectPageInner />
+    </Suspense>
+  );
+}
+
+/* ─── Inner page ─────────────────────────────────────────────────────────────── */
+function ProjectPageInner() {
   const { workspaceId, projectId } = useParams<{ workspaceId: string; projectId: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout, user } = useAuth();
+  const { user } = useAuth();
 
+  /* ── Project + member details ─────────────────────────────────────────── */
+  const [project, setProject] = useState<Project | null>(null);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+
+  useEffect(() => {
+    api.get<Project>(`/workspaces/${workspaceId}/projects/${projectId}`)
+      .then((r) => setProject(r.data))
+      .catch(() => {});
+    api.get<ProjectMember[]>(`/workspaces/${workspaceId}/projects/${projectId}/members`)
+      .then((r) => setMembers(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+    api.get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`)
+      .then((r) => setSprints(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+  }, [workspaceId, projectId]);
+
+  /* ── View state ─────────────────────────────────────────────────────────── */
   const [activeTab, setActiveTab] = useState<ViewTab>('board');
-  const [createWithDate, setCreateWithDate] = useState<string | undefined>();
+  const [selectedSprint, setSelectedSprint] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
+  /* ── Hooks ──────────────────────────────────────────────────────────────── */
   const { echo, connected } = useEcho();
-  const { statuses } = useProjectStatuses(workspaceId, projectId);
+  const { statuses, refresh: refreshStatuses } = useProjectStatuses(workspaceId, projectId);
 
   const filters = useMemo<TaskFilters>(() => ({
-    label_ids:      searchParams.getAll('label_ids[]').length ? searchParams.getAll('label_ids[]') : undefined,
-    assignee_ids:   searchParams.getAll('assignee_ids[]').length ? searchParams.getAll('assignee_ids[]') : undefined,
-    milestone_id:   searchParams.get('milestone_id') ?? undefined,
-    due_date_from:  searchParams.get('due_date_from') ?? undefined,
-    due_date_to:    searchParams.get('due_date_to') ?? undefined,
-    status:         searchParams.get('status') ?? undefined,
-    has_subtasks:   searchParams.get('has_subtasks') === '1' || undefined,
-    is_overdue:     searchParams.get('is_overdue') === '1' || undefined,
-    watcher_id:     searchParams.get('watcher_id') ?? undefined,
-    sort_by:        (searchParams.get('sort_by') as TaskFilters['sort_by']) ?? undefined,
-    sort_dir:       (searchParams.get('sort_dir') as TaskFilters['sort_dir']) ?? undefined,
+    label_ids:     searchParams.getAll('label_ids[]').length ? searchParams.getAll('label_ids[]') : undefined,
+    assignee_ids:  searchParams.getAll('assignee_ids[]').length ? searchParams.getAll('assignee_ids[]') : undefined,
+    milestone_id:  searchParams.get('milestone_id') ?? undefined,
+    due_date_from: searchParams.get('due_date_from') ?? undefined,
+    due_date_to:   searchParams.get('due_date_to') ?? undefined,
+    status:        searchParams.get('status') ?? undefined,
+    has_subtasks:  searchParams.get('has_subtasks') === '1' || undefined,
+    is_overdue:    searchParams.get('is_overdue') === '1' || undefined,
+    watcher_id:    searchParams.get('watcher_id') ?? undefined,
+    sort_by:       (searchParams.get('sort_by') as TaskFilters['sort_by']) ?? undefined,
+    sort_dir:      (searchParams.get('sort_dir') as TaskFilters['sort_dir']) ?? undefined,
   }), [searchParams]);
+
+  const activeFilterCount = Object.values(filters).filter(
+    (v) => v !== undefined && (Array.isArray(v) ? v.length > 0 : true),
+  ).length;
 
   const handleFilterChange = useCallback((newFilters: TaskFilters) => {
     const p = new URLSearchParams();
     newFilters.label_ids?.forEach((id) => p.append('label_ids[]', id));
     newFilters.assignee_ids?.forEach((id) => p.append('assignee_ids[]', id));
-    if (newFilters.milestone_id) p.set('milestone_id', newFilters.milestone_id);
+    if (newFilters.milestone_id)  p.set('milestone_id', newFilters.milestone_id);
     if (newFilters.due_date_from) p.set('due_date_from', newFilters.due_date_from);
-    if (newFilters.due_date_to) p.set('due_date_to', newFilters.due_date_to);
-    if (newFilters.status) p.set('status', newFilters.status);
-    if (newFilters.has_subtasks) p.set('has_subtasks', '1');
-    if (newFilters.is_overdue) p.set('is_overdue', '1');
-    if (newFilters.watcher_id) p.set('watcher_id', newFilters.watcher_id);
-    if (newFilters.sort_by) p.set('sort_by', newFilters.sort_by);
-    if (newFilters.sort_dir) p.set('sort_dir', newFilters.sort_dir);
+    if (newFilters.due_date_to)   p.set('due_date_to', newFilters.due_date_to);
+    if (newFilters.status)        p.set('status', newFilters.status);
+    if (newFilters.has_subtasks)  p.set('has_subtasks', '1');
+    if (newFilters.is_overdue)    p.set('is_overdue', '1');
+    if (newFilters.watcher_id)    p.set('watcher_id', newFilters.watcher_id);
+    if (newFilters.sort_by)       p.set('sort_by', newFilters.sort_by);
+    if (newFilters.sort_dir)      p.set('sort_dir', newFilters.sort_dir);
     const qs = p.toString();
     router.push(qs ? `?${qs}` : '?', { scroll: false });
   }, [router]);
 
+  const clearFilters = () => { router.push('?', { scroll: false }); };
+
   const { tasks, loading, reorder, refresh } = useTasks(workspaceId, projectId, filters, echo);
 
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showSprints, setShowSprints] = useState(false);
-  const [showPalette, setShowPalette] = useState(false);
-  const [createStatusId, setCreateStatusId] = useState<string | undefined>();
+  /* ── Modal state ─────────────────────────────────────────────────────────── */
+  const [selectedTaskId, setSelectedTaskId]     = useState<string | null>(null);
+  const [showCreate, setShowCreate]             = useState(false);
+  const [showSprints, setShowSprints]           = useState(false);
+  const [showPalette, setShowPalette]           = useState(false);
+  const [createStatusId, setCreateStatusId]     = useState<string | undefined>();
+  const [createWithDate, setCreateWithDate]     = useState<string | undefined>();
+  const [selectedIds, setSelectedIds]           = useState<Set<string>>(new Set());
 
+  /* ── Keyboard shortcut ───────────────────────────────────────────────────── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -94,235 +162,362 @@ export default function ProjectPage() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
+  /* ── Selection ───────────────────────────────────────────────────────────── */
   const toggleSelectTask = useCallback((taskId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(taskId)) { next.delete(taskId); } else { next.add(taskId); }
+      if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
       return next;
     });
   }, []);
-
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
+  /* ── Stats ───────────────────────────────────────────────────────────────── */
+  const doneTasks = useMemo(() => {
+    if (statuses.length > 0) {
+      return statuses.filter((s) => s.is_done).reduce((sum, s) => sum + (tasks[s.id]?.length ?? 0), 0);
+    }
+    return tasks['done']?.length ?? 0;
+  }, [statuses, tasks]);
+
+  const totalTasks   = Object.values(tasks).reduce((sum, col) => sum + col.length, 0);
+  const progressPct  = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+  /* ── Board actions ───────────────────────────────────────────────────────── */
   const handleReorder = (items: ReorderItem[]) => reorder(items);
+
   const handleTaskClick = (task: Task) => {
     if (selectedIds.size > 0) { toggleSelectTask(task.id); return; }
     setSelectedTaskId(task.id);
   };
-  const handleTaskIdClick = (taskId: string) => setSelectedTaskId(taskId);
 
   const handleAddTask = (statusId: string) => {
     setCreateStatusId(statusId);
     setShowCreate(true);
   };
 
-  const doneTasks = useMemo(() => {
-    if (statuses.length > 0) {
-      return statuses
-        .filter((s) => s.is_done)
-        .reduce((sum, s) => sum + (tasks[s.id]?.length ?? 0), 0);
-    }
-    return tasks['done']?.length ?? 0;
-  }, [statuses, tasks]);
+  const handleQuickCreate = useCallback(async (title: string, statusId: string) => {
+    await api.post(`/workspaces/${workspaceId}/projects/${projectId}/tasks`, {
+      title,
+      project_status_id: statusId,
+    });
+    refresh();
+  }, [workspaceId, projectId, refresh]);
 
-  const totalTasks = Object.values(tasks).reduce((sum, col) => sum + col.length, 0);
-  const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+  const handleMoveTask = useCallback(async (taskId: string, statusId: string) => {
+    const status = statuses.find((s) => s.id === statusId);
+    await api.patch(`/tasks/${taskId}`, {
+      project_status_id: statusId,
+      status: status?.slug ?? 'todo',
+    });
+    refresh();
+  }, [statuses, refresh]);
 
-  const handleCalendarCreateDate = (date: string) => {
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    await api.delete(`/tasks/${taskId}`);
+    refresh();
+  }, [refresh]);
+
+  const handleAddStatus = useCallback(async (name: string, color: string) => {
+    await api.post(`/workspaces/${workspaceId}/projects/${projectId}/statuses`, { name, color });
+    refreshStatuses();
+  }, [workspaceId, projectId, refreshStatuses]);
+
+  const handleCalendarCreate = (date: string) => {
     setCreateWithDate(date);
     setShowCreate(true);
   };
 
+  /* ── Active filter chips for toolbar ────────────────────────────────────── */
+  const filterChips: { key: string; label: string }[] = [];
+  if (filters.status)     filterChips.push({ key: 'status',    label: `Status: ${filters.status}` });
+  if (filters.is_overdue) filterChips.push({ key: 'is_overdue', label: 'Overdue' });
+  if (filters.has_subtasks) filterChips.push({ key: 'has_subtasks', label: 'Has subtasks' });
+  if ((filters.assignee_ids?.length ?? 0) > 0) filterChips.push({ key: 'assignee_ids', label: `${filters.assignee_ids!.length} assignee(s)` });
+  if ((filters.label_ids?.length ?? 0) > 0)    filterChips.push({ key: 'label_ids', label: `${filters.label_ids!.length} label(s)` });
+
+  const removeFilterChip = (key: string) => {
+    const updated = { ...filters };
+    if (key === 'assignee_ids') updated.assignee_ids = undefined;
+    else if (key === 'label_ids') updated.label_ids = undefined;
+    else (updated as Record<string, unknown>)[key] = undefined;
+    handleFilterChange(updated);
+  };
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-[#F4F5F7] flex flex-col">
-      {/* Top nav bar */}
-      <header className="bg-white border-b border-[#DFE1E6] sticky top-0 z-20">
-        {/* Breadcrumb + actions row */}
-        <div className="px-6 h-14 flex items-center justify-between gap-4">
-          {/* Left: breadcrumb */}
-          <div className="flex items-center gap-2 min-w-0">
-            <button
-              type="button"
-              onClick={() => router.push(`/workspaces/${workspaceId}/projects`)}
-              className="flex items-center gap-1.5 text-[#626F86] hover:text-[#0052CC] text-sm font-medium transition-colors flex-shrink-0"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                <polyline points="9 22 9 12 15 12 15 22"/>
-              </svg>
-              Projects
-            </button>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DFE1E6" strokeWidth="2" className="flex-shrink-0">
-              <path d="m9 18 6-6-6-6"/>
-            </svg>
-            <span className="text-sm font-semibold text-[#172B4D] truncate">Board</span>
-          </div>
+    <div className="flex flex-col h-[calc(100vh-52px)]">
 
-          {/* Right: actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {connected && (
-              <span className="hidden md:flex items-center gap-1.5 text-xs text-[#57D9A3] font-medium bg-[#E3FCEF] px-2.5 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#57D9A3] animate-pulse" />
-                Live
-              </span>
-            )}
+      {/* ── Layer 1: Project header ───────────────────────────────────────── */}
+      <div className="h-14 bg-background border-b border-border px-6 flex items-center justify-between sticky top-0 z-30 flex-shrink-0">
+        {/* LEFT: breadcrumb + live indicator */}
+        <div className="flex items-center gap-3 min-w-0">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink
+                  href={`/workspaces/${workspaceId}/projects`}
+                  className="text-sm"
+                  onClick={(e) => { e.preventDefault(); router.push(`/workspaces/${workspaceId}/projects`); }}
+                >
+                  Projects
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                {project ? (
+                  <BreadcrumbPage className="text-sm">{project.name}</BreadcrumbPage>
+                ) : (
+                  <Skeleton className="h-4 w-32" />
+                )}
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
 
-            {totalTasks > 0 && activeTab === 'board' && (
-              <div className="hidden md:flex items-center gap-1.5 text-xs bg-[#F4F5F7] rounded-full px-3 py-1.5 border border-[#DFE1E6]">
-                <span className="font-bold text-[#36B37E]">{progressPct}%</span>
-                <span className="text-[#DFE1E6]">|</span>
-                <span className="text-[#626F86]">{doneTasks}/{totalTasks} done</span>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setShowSprints(true)}
-              className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-[#626F86] border border-[#DFE1E6] rounded px-2.5 py-1.5 hover:bg-[#F4F5F7] transition-colors"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
-              Sprints
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push(`/workspaces/${workspaceId}/labels`)}
-              className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-[#626F86] border border-[#DFE1E6] rounded px-2.5 py-1.5 hover:bg-[#F4F5F7] transition-colors"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                <line x1="7" y1="7" x2="7.01" y2="7"/>
-              </svg>
-              Labels
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push(`/workspaces/${workspaceId}/projects/${projectId}/settings`)}
-              className="flex items-center justify-center w-8 h-8 text-[#626F86] border border-[#DFE1E6] rounded hover:bg-[#F4F5F7] transition-colors"
-              title="Project settings"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowPalette(true)}
-              title="Search (Ctrl+K)"
-              className="flex items-center gap-1.5 text-xs font-medium text-[#626F86] border border-[#DFE1E6] rounded px-2.5 py-1.5 hover:bg-[#F4F5F7] transition-colors"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-              </svg>
-              <span className="hidden sm:inline text-[#B3BAC5] text-[11px]">⌘K</span>
-            </button>
-
-            <div className="w-px h-5 bg-[#DFE1E6]" />
-
-            <NotificationsBell />
-
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-[#0052CC] text-white text-[11px] flex items-center justify-center font-bold flex-shrink-0">
-                {user?.name?.[0]?.toUpperCase() ?? '?'}
-              </div>
-              <span className="text-sm text-[#172B4D] font-medium hidden lg:block">{user?.name}</span>
-            </div>
-
-            <button
-              type="button"
-              onClick={logout}
-              className="text-xs text-[#626F86] hover:text-red-500 transition-colors font-medium"
-            >
-              Sign out
-            </button>
-          </div>
+          {connected && (
+            <span className="hidden md:flex items-center gap-1.5 text-xs text-success font-medium bg-success-subtle px-2 py-0.5 rounded-full flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              Live
+            </span>
+          )}
         </div>
 
-        {/* Tab bar */}
-        <div className="px-6 flex items-center gap-0 border-t border-[#DFE1E6]">
-          {TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={`relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap
-                ${activeTab === id
-                  ? 'text-[#0052CC] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#0052CC]'
-                  : 'text-[#626F86] hover:text-[#172B4D] hover:bg-[#F4F5F7]'
-                }`}
+        {/* RIGHT: progress + members + actions */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Progress pill */}
+          {totalTasks > 0 && activeTab === 'board' && (
+            <span className="hidden md:flex items-center gap-1.5 text-xs bg-muted px-3 py-1 rounded-full border border-border">
+              <span className="font-semibold text-success">{progressPct}%</span>
+              <span className="text-border">|</span>
+              <span className="text-foreground-secondary">{doneTasks}/{totalTasks}</span>
+            </span>
+          )}
+
+          {/* Sprint button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden sm:flex h-8 text-xs"
+            onClick={() => setShowSprints(true)}
+          >
+            <Zap className="w-3.5 h-3.5 mr-1.5" />
+            Sprints
+          </Button>
+
+          {/* Member avatars */}
+          {members.length > 0 && (
+            <div className="hidden md:flex -space-x-2">
+              {members.slice(0, 4).map((m) => (
+                <span
+                  key={m.user.id}
+                  title={m.user.name}
+                  className={cn(
+                    'w-7 h-7 rounded-full border-2 border-background text-[10px] text-white font-bold flex items-center justify-center flex-shrink-0',
+                    avatarBg(m.user.id),
+                  )}
+                >
+                  {initials(m.user.name)}
+                </span>
+              ))}
+              {members.length > 4 && (
+                <span className="w-7 h-7 rounded-full border-2 border-background bg-muted text-foreground-secondary text-[10px] font-bold flex items-center justify-center">
+                  +{members.length - 4}
+                </span>
+              )}
+            </div>
+          )}
+
+          <Button variant="outline" size="sm" className="h-8 text-xs hidden sm:flex">
+            <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+            Invite
+          </Button>
+
+          {/* More options */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="h-8 w-8 flex items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:bg-accent outline-none transition-colors"
+              aria-label="More options"
             >
-              {label}
+              <MoreHorizontal className="w-4 h-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => router.push(`/workspaces/${workspaceId}/projects/${projectId}/settings`)}>
+                <Settings className="w-4 h-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { void navigator.clipboard.writeText(window.location.href); }}>
+                <Link2 className="w-4 h-4" />
+                Copy link
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive">
+                <Trash2 className="w-4 h-4" />
+                Delete project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* ── Layer 2: View toolbar ─────────────────────────────────────────── */}
+      <div className="h-11 bg-background border-b border-border px-4 flex items-center gap-2 sticky top-14 z-20 flex-shrink-0">
+        {/* View switcher tabs */}
+        <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5 flex-shrink-0">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => setActiveTab(v.id)}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-all duration-150',
+                activeTab === v.id
+                  ? 'bg-background shadow-sm text-foreground font-medium'
+                  : 'text-foreground-tertiary hover:text-foreground',
+              )}
+            >
+              <v.icon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{v.label}</span>
             </button>
           ))}
         </div>
-      </header>
 
-      {/* Main content */}
-      <main className="flex-1 p-6 min-h-0">
-        {activeTab === 'board' && (
-          <div>
-            {/* Board toolbar */}
-            <div className="flex items-center justify-between mb-4 gap-3">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => { setCreateStatusId(undefined); setShowCreate(true); }}
-                  className="flex items-center gap-1.5 bg-[#0052CC] hover:bg-[#0747A6] text-white text-sm font-medium px-3.5 py-2 rounded transition-colors"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M12 5v14M5 12h14"/>
-                  </svg>
-                  Create task
-                </button>
+        <div className="w-px h-5 bg-border flex-shrink-0" />
 
-                {selectedIds.size > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearSelection}
-                    className="text-sm text-[#626F86] hover:text-[#172B4D] flex items-center gap-1 transition-colors"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 6 6 18M6 6l12 12"/>
-                    </svg>
-                    {selectedIds.size} selected
-                  </button>
-                )}
-              </div>
-            </div>
+        {/* Filters */}
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            'h-7 text-xs flex-shrink-0',
+            activeFilterCount > 0 && 'border-primary text-primary',
+          )}
+          onClick={() => handleFilterChange(filters)}
+        >
+          <Filter className="w-3 h-3 mr-1.5" />
+          {activeFilterCount > 0 ? `Filters · ${activeFilterCount}` : 'Filter'}
+        </Button>
 
-            <FilterBar
-              workspaceId={workspaceId}
-              projectId={projectId}
-              filters={filters}
-              onChange={handleFilterChange}
-            />
+        {/* Active filter chips */}
+        {filterChips.map((chip) => (
+          <span
+            key={chip.key}
+            className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-subtle text-primary-subtle-foreground rounded-full text-xs font-medium animate-slide-up flex-shrink-0"
+          >
+            {chip.label}
+            <button
+              type="button"
+              onClick={() => removeFilterChip(chip.key)}
+              className="hover:text-primary ml-0.5"
+              aria-label={`Remove ${chip.label} filter`}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
 
-            {loading ? (
-              <div className="flex flex-col items-center justify-center h-64 gap-3">
-                <div className="w-8 h-8 border-2 border-[#0052CC] border-t-transparent rounded-full animate-spin" />
-                <p className="text-[#626F86] text-sm">Loading board…</p>
-              </div>
-            ) : (
-              <KanbanBoard
-                tasks={tasks}
-                columns={statuses.length > 0 ? statuses : undefined}
-                onReorder={handleReorder}
-                onTaskClick={handleTaskClick}
-                onAddTask={handleAddTask}
-                selectedIds={selectedIds}
-                onSelectTask={toggleSelectTask}
-              />
-            )}
-          </div>
+        {activeFilterCount > 1 && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="text-xs text-foreground-tertiary hover:text-destructive transition-colors flex-shrink-0"
+          >
+            Clear all
+          </button>
         )}
 
-        {activeTab === 'backlog' && (
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Sprint selector */}
+        {sprints.length > 0 && (
+          <select
+            aria-label="Sprint filter"
+            value={selectedSprint}
+            onChange={(e) => setSelectedSprint(e.target.value)}
+            className="h-7 text-xs bg-background border border-border rounded-md px-2 text-foreground-secondary focus:outline-none focus:ring-2 focus:ring-ring w-36 flex-shrink-0"
+          >
+            <option value="all">All sprints</option>
+            {sprints.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        )}
+
+        {/* Search */}
+        <div className="relative flex-shrink-0">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground-tertiary pointer-events-none" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search tasks…"
+            className={cn(
+              'h-7 pl-7 pr-3 text-xs bg-muted rounded-md border border-transparent',
+              'focus:outline-none focus:border-border-strong focus:bg-background',
+              'transition-all duration-150 w-28 focus:w-48',
+              'placeholder:text-foreground-tertiary text-foreground',
+            )}
+          />
+        </div>
+
+        {/* Create task */}
+        <Button
+          size="sm"
+          className="h-7 text-xs flex-shrink-0"
+          onClick={() => { setCreateStatusId(undefined); setShowCreate(true); }}
+        >
+          <Plus className="w-3.5 h-3.5 mr-1" />
+          New task
+        </Button>
+
+        {/* Command palette */}
+        <button
+          type="button"
+          onClick={() => setShowPalette(true)}
+          title="Search (Ctrl+K)"
+          className="h-7 flex items-center gap-1 text-xs text-foreground-tertiary border border-border rounded-md px-2 hover:bg-accent transition-colors flex-shrink-0"
+        >
+          <Search className="w-3 h-3" />
+          <span className="hidden lg:inline text-[10px] text-foreground-muted">⌘K</span>
+        </button>
+      </div>
+
+      {/* ── Layer 3: Content ──────────────────────────────────────────────── */}
+      {activeTab === 'board' && (
+        <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
+          {loading ? (
+            <div className="flex gap-3 px-6 py-4">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="min-w-[272px] flex-shrink-0 bg-background-secondary rounded-xl border border-border p-3 space-y-2"
+                >
+                  <Skeleton className="h-5 w-24" />
+                  {[1, 2, 3].map((j) => (
+                    <Skeleton key={j} className="h-24 w-full rounded-lg" />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <KanbanBoard
+              tasks={tasks}
+              columns={statuses.length > 0 ? statuses : undefined}
+              onReorder={handleReorder}
+              onTaskClick={handleTaskClick}
+              onAddTask={handleAddTask}
+              onQuickCreate={handleQuickCreate}
+              onMoveTask={handleMoveTask}
+              onDeleteTask={handleDeleteTask}
+              onAddStatus={handleAddStatus}
+              selectedIds={selectedIds}
+              onSelectTask={toggleSelectTask}
+            />
+          )}
+        </div>
+      )}
+
+      {activeTab === 'backlog' && (
+        <div className="flex-1 overflow-y-auto min-h-0">
           <BacklogView
             workspaceId={workspaceId}
             projectId={projectId}
@@ -330,42 +525,51 @@ export default function ProjectPage() {
             onTaskClick={handleTaskClick}
             onRefresh={refresh}
           />
-        )}
+        </div>
+      )}
 
-        {activeTab === 'timeline' && (
+      {activeTab === 'timeline' && (
+        <div className="flex-1 overflow-y-auto min-h-0">
           <TimelineView
             workspaceId={workspaceId}
             projectId={projectId}
-            onTaskClick={handleTaskIdClick}
+            onTaskClick={(id) => setSelectedTaskId(id)}
           />
-        )}
+        </div>
+      )}
 
-        {activeTab === 'calendar' && (
+      {activeTab === 'calendar' && (
+        <div className="flex-1 overflow-y-auto min-h-0">
           <CalendarView
             workspaceId={workspaceId}
             projectId={projectId}
             currentUserId={user?.id}
-            onTaskClick={handleTaskIdClick}
-            onCreateWithDate={handleCalendarCreateDate}
+            onTaskClick={(id) => setSelectedTaskId(id)}
+            onCreateWithDate={handleCalendarCreate}
           />
-        )}
+        </div>
+      )}
 
-        {activeTab === 'workload' && (
-          <WorkloadView
-            workspaceId={workspaceId}
-            projectId={projectId}
-            onTaskClick={handleTaskIdClick}
-          />
-        )}
+      {activeTab === 'list' && (
+        <div className="flex-1 overflow-y-auto min-h-0 p-6">
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <List className="w-10 h-10 text-foreground-muted mb-3" />
+            <p className="text-sm font-medium text-foreground-secondary mb-1">List view</p>
+            <p className="text-xs text-foreground-tertiary">Coming soon in 06_remaining.md</p>
+          </div>
+        </div>
+      )}
 
-        {activeTab === 'analytics' && (
+      {activeTab === 'analytics' && (
+        <div className="flex-1 overflow-y-auto min-h-0">
           <AnalyticsDashboard
             workspaceId={workspaceId}
             projectId={projectId}
           />
-        )}
-      </main>
+        </div>
+      )}
 
+      {/* ── Modals ───────────────────────────────────────────────────────── */}
       {selectedTaskId && (
         <TaskDetailModal
           taskId={selectedTaskId}
@@ -382,7 +586,11 @@ export default function ProjectPage() {
           projectId={projectId}
           defaultDueDate={createWithDate}
           defaultStatusId={createStatusId}
-          onClose={() => { setShowCreate(false); setCreateWithDate(undefined); setCreateStatusId(undefined); }}
+          onClose={() => {
+            setShowCreate(false);
+            setCreateWithDate(undefined);
+            setCreateStatusId(undefined);
+          }}
           onCreate={refresh}
         />
       )}
@@ -409,6 +617,22 @@ export default function ProjectPage() {
           onClose={() => setShowPalette(false)}
           onTaskClick={(taskId) => { setSelectedTaskId(taskId); setShowPalette(false); }}
         />
+      )}
+
+      {/* Inline "selected" bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-foreground text-background text-sm px-4 py-2 rounded-full shadow-lg z-50 animate-slide-up">
+          <Check className="w-4 h-4" />
+          <span>{selectedIds.size} selected</span>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="ml-1 hover:opacity-70 transition-opacity"
+            aria-label="Clear selection"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
     </div>
   );
