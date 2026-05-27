@@ -32,14 +32,13 @@ export function AppShell({
   children,
   className,
 }: Props) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    return saved === 'true';
+  });
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState(workspaceNameProp ?? '');
-
-  useEffect(() => {
-    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    if (saved !== null) setCollapsed(saved === 'true');
-  }, []);
 
   // Auto-fetch workspace name when not provided
   useEffect(() => {

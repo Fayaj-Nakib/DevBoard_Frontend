@@ -8,11 +8,13 @@ interface Props {
   workspaceId: string;
   projectId: string;
   defaultDueDate?: string;
+  /** Pre-select this status column when opening from a Kanban column header */
+  defaultStatusId?: string;
   onClose: () => void;
   onCreate: () => void;
 }
 
-export default function CreateTaskModal({ workspaceId, projectId, defaultDueDate, onClose, onCreate }: Props) {
+export default function CreateTaskModal({ workspaceId, projectId, defaultDueDate, defaultStatusId, onClose, onCreate }: Props) {
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -20,6 +22,7 @@ export default function CreateTaskModal({ workspaceId, projectId, defaultDueDate
     due_date: defaultDueDate ?? '',
     started_at: '',
     estimate: '',
+    status_id: defaultStatusId ?? '',
     milestone_id: '',
     sprint_id: '',
   });

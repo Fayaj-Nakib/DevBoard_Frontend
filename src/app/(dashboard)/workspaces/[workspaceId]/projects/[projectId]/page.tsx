@@ -381,6 +381,7 @@ export default function ProjectPage() {
           workspaceId={workspaceId}
           projectId={projectId}
           defaultDueDate={createWithDate}
+          defaultStatusId={createStatusId}
           onClose={() => { setShowCreate(false); setCreateWithDate(undefined); setCreateStatusId(undefined); }}
           onCreate={refresh}
         />

@@ -245,7 +245,6 @@ export default function TimeTracker({ taskId, currentUserId }: Props) {
                 </div>
                 {editingId === log.id ? (
                   <div className="mt-1 flex gap-1">
-                    {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
                     <input
                       aria-label="Edit note"
                       value={editNote}
