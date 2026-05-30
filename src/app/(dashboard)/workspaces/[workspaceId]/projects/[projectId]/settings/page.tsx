@@ -302,12 +302,6 @@ function GeneralSection({
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    setName(project.name);
-    setDescription(project.description ?? '');
-    setColor(project.color ?? '#6366F1');
-  }, [project.id]);
-
   const saveGeneral = () => {
     setSaving(true);
     api.patch<ProjectDetail>(`/workspaces/${workspaceId}/projects/${projectId}`, {
@@ -720,8 +714,6 @@ function SortableStatusRow({
 
   const [localName, setLocalName] = useState(status.name);
 
-  useEffect(() => { setLocalName(status.name); }, [status.name]);
-
   return (
     <div
       ref={setNodeRef}
@@ -959,8 +951,6 @@ function SortableLabelRow({
   } = useSortable({ id: label.id });
 
   const [localName, setLocalName] = useState(label.name);
-
-  useEffect(() => { setLocalName(label.name); }, [label.name]);
 
   return (
     <div
