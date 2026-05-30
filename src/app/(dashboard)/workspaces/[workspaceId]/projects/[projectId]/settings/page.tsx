@@ -1,442 +1,525 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  Settings, Users, Shield, Columns2, Tag, Sliders, Copy, Zap, Flag,
+  Workflow, Webhook as WebhookIcon, Archive, Trash2, ChevronLeft, Plus, X,
+  GripVertical, MoreHorizontal, Loader2, ExternalLink,
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { toast } from 'sonner';
+
 import api from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 import type {
   ProjectStatus, TaskTemplate, AutomationRule, AutomationTriggerType, AutomationActionType,
   ProjectMember, ProjectRole, WorkspaceMember, CustomFieldDefinition, CustomFieldType,
-  ImportJob, GitHubConnection, GitHubIssue,
+  Webhook, WebhookEvent,
 } from '@/types';
 
-type Tab = 'statuses' | 'templates' | 'automation' | 'members' | 'custom-fields' | 'export' | 'github';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label as FormLabel } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import {
+  Card, CardContent, CardHeader, CardTitle, CardFooter,
+} from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
+} from '@/components/ui/sheet';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface ProjectDetail {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description?: string;
+  status: 'active' | 'archived';
+  color?: string;
+  identifier_prefix?: string;
+  github_repo?: string | null;
+}
+
+interface LabelWithCount {
+  id: string;
+  workspace_id: string;
+  name: string;
+  color: string;
+  tasks_count?: number;
+}
+
+type Section =
+  | 'general' | 'members' | 'roles' | 'statuses' | 'labels'
+  | 'custom-fields' | 'templates' | 'sprints' | 'milestones'
+  | 'automations' | 'webhooks';
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const STATUS_COLORS = [
+  '#7C3AED', '#DC2626', '#D97706', '#16A34A',
+  '#2563EB', '#0891B2', '#BE185D', '#6B7280',
+  '#059669', '#EA580C', '#7C2D12', '#1D4ED8',
+];
+
+const PROJECT_COLORS = [
+  '#6366F1', '#8B5CF6', '#EC4899', '#EF4444',
+  '#F97316', '#EAB308', '#22C55E', '#14B8A6',
+  '#3B82F6', '#06B6D4', '#84CC16', '#F59E0B',
+];
+
+const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string }[] = [
+  { value: 'task_created', label: 'Task created' },
+  { value: 'status_changed', label: 'Status changed' },
+  { value: 'due_date_reached', label: 'Due date reached' },
+  { value: 'assignee_added', label: 'Assignee added' },
+  { value: 'comment_added', label: 'Comment added' },
+];
+
+const ACTION_OPTIONS: { value: AutomationActionType; label: string }[] = [
+  { value: 'change_status', label: 'Change status' },
+  { value: 'assign_user', label: 'Assign user' },
+  { value: 'add_label', label: 'Add label' },
+  { value: 'post_comment', label: 'Post comment' },
+  { value: 'send_notification', label: 'Send notification' },
+];
+
+const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
+  text: 'Text', number: 'Number', date: 'Date',
+  select: 'Select', url: 'URL', checkbox: 'Checkbox',
+};
+
+const WEBHOOK_EVENTS: { value: WebhookEvent; label: string }[] = [
+  { value: 'task.created', label: 'Task created' },
+  { value: 'task.updated', label: 'Task updated' },
+  { value: 'task.deleted', label: 'Task deleted' },
+  { value: 'task.status_changed', label: 'Status changed' },
+  { value: 'comment.created', label: 'Comment added' },
+  { value: 'project.created', label: 'Project created' },
+  { value: 'project.updated', label: 'Project updated' },
+];
+
+function initials(name: string) {
+  return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+}
+
+// ── Nav ──────────────────────────────────────────────────────────────────────
+
+interface NavItemProps {
+  id: Section;
+  current: Section;
+  onSelect: (s: Section) => void;
+  icon: React.ElementType;
+  label: string;
+  danger?: 'warning' | 'destructive';
+}
+
+function NavItem({ id, current, onSelect, icon: Icon, label, danger }: NavItemProps) {
+  const isActive = id === current;
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(id)}
+      className={cn(
+        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-all duration-150 w-full text-left',
+        isActive
+          ? 'bg-sidebar-accent text-foreground font-medium border-l-2 border-primary rounded-l-none'
+          : 'text-foreground-secondary hover:bg-accent/50 hover:text-foreground',
+        !isActive && danger === 'warning' && 'text-warning hover:bg-warning-subtle',
+        !isActive && danger === 'destructive' && 'text-destructive hover:bg-destructive-subtle',
+      )}
+    >
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      {label}
+    </button>
+  );
+}
+
+function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-foreground-muted px-3 pt-4 pb-1">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProjectSettingsPage() {
   const { workspaceId, projectId } = useParams<{ workspaceId: string; projectId: string }>();
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('statuses');
+  const [section, setSection] = useState<Section>('general');
+  const [project, setProject] = useState<ProjectDetail | null>(null);
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'statuses', label: 'Board Statuses' },
-    { key: 'templates', label: 'Task Templates' },
-    { key: 'automation', label: 'Automation' },
-    { key: 'members', label: 'Members' },
-    { key: 'custom-fields', label: 'Custom Fields' },
-    { key: 'export', label: 'Export / Import' },
-    { key: 'github', label: 'GitHub' },
-  ];
+  useEffect(() => {
+    api.get<ProjectDetail>(`/workspaces/${workspaceId}/projects/${projectId}`)
+      .then((r) => setProject(r.data));
+  }, [workspaceId, projectId]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b px-6 py-3.5 flex items-center gap-3 sticky top-0 z-10">
+    <div className="flex h-[calc(100vh-52px)]">
+      {/* ── Settings Nav ── */}
+      <nav className="w-[220px] flex-shrink-0 h-full overflow-y-auto border-r border-border bg-background-secondary py-4 px-3">
         <button
           type="button"
           onClick={() => router.push(`/workspaces/${workspaceId}/projects/${projectId}`)}
-          className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1"
+          className="flex items-center gap-2 text-sm text-foreground-tertiary hover:text-foreground mb-5 px-2 transition-colors w-full"
         >
-          ← Board
+          <ChevronLeft className="w-4 h-4" />
+          {project?.name ?? 'Project'}
         </button>
-        <span className="text-gray-200 text-lg">/</span>
-        <h1 className="text-sm font-semibold text-gray-800">Project Settings</h1>
+
+        <NavGroup label="General">
+          <NavItem id="general" current={section} onSelect={setSection} icon={Settings} label="General" />
+          <NavItem id="members" current={section} onSelect={setSection} icon={Users} label="Members" />
+          <NavItem id="roles" current={section} onSelect={setSection} icon={Shield} label="Roles" />
+        </NavGroup>
+
+        <NavGroup label="Workflow">
+          <NavItem id="statuses" current={section} onSelect={setSection} icon={Columns2} label="Statuses" />
+          <NavItem id="labels" current={section} onSelect={setSection} icon={Tag} label="Labels" />
+          <NavItem id="custom-fields" current={section} onSelect={setSection} icon={Sliders} label="Custom fields" />
+          <NavItem id="templates" current={section} onSelect={setSection} icon={Copy} label="Templates" />
+        </NavGroup>
+
+        <NavGroup label="Planning">
+          <NavItem id="sprints" current={section} onSelect={setSection} icon={Zap} label="Sprints" />
+          <NavItem id="milestones" current={section} onSelect={setSection} icon={Flag} label="Milestones" />
+        </NavGroup>
+
+        <NavGroup label="Integrations">
+          <NavItem id="automations" current={section} onSelect={setSection} icon={Workflow} label="Automations" />
+          <NavItem id="webhooks" current={section} onSelect={setSection} icon={WebhookIcon} label="Webhooks" />
+        </NavGroup>
+
+        <NavGroup label="Danger Zone">
+          <NavItem id="general" current={section} onSelect={setSection} icon={Archive} label="Archive project" danger="warning" />
+          <NavItem id="general" current={section} onSelect={setSection} icon={Trash2} label="Delete project" danger="destructive" />
+        </NavGroup>
       </nav>
 
-      <div className="max-w-3xl mx-auto p-6">
-        <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1 flex-wrap">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
-                tab === t.key ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      {/* ── Content ── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-8 py-8">
+          {section === 'general' && project && (
+            <GeneralSection
+              workspaceId={workspaceId}
+              projectId={projectId}
+              project={project}
+              onProjectUpdate={setProject}
+            />
+          )}
+          {section === 'members' && (
+            <MembersSection workspaceId={workspaceId} projectId={projectId} />
+          )}
+          {(section as string) === 'roles' && (
+            <RolesSection />
+          )}
+          {section === 'statuses' && (
+            <StatusesSection workspaceId={workspaceId} projectId={projectId} />
+          )}
+          {section === 'labels' && (
+            <LabelsSection workspaceId={workspaceId} projectId={projectId} />
+          )}
+          {section === 'custom-fields' && (
+            <CustomFieldsSection workspaceId={workspaceId} projectId={projectId} />
+          )}
+          {section === 'templates' && (
+            <TemplatesSection workspaceId={workspaceId} projectId={projectId} />
+          )}
+          {section === 'sprints' && (
+            <SprintsSection workspaceId={workspaceId} projectId={projectId} />
+          )}
+          {section === 'milestones' && (
+            <MilestonesSection workspaceId={workspaceId} projectId={projectId} />
+          )}
+          {section === 'automations' && (
+            <AutomationsSection workspaceId={workspaceId} projectId={projectId} />
+          )}
+          {section === 'webhooks' && (
+            <WebhooksSection workspaceId={workspaceId} projectId={projectId} />
+          )}
         </div>
-
-        {tab === 'statuses'      && <StatusManager workspaceId={workspaceId} projectId={projectId} />}
-        {tab === 'templates'     && <TemplateManager workspaceId={workspaceId} projectId={projectId} />}
-        {tab === 'automation'    && <AutomationRulesManager workspaceId={workspaceId} projectId={projectId} />}
-        {tab === 'members'       && <MembersManager workspaceId={workspaceId} projectId={projectId} />}
-        {tab === 'custom-fields' && <CustomFieldsManager workspaceId={workspaceId} projectId={projectId} />}
-        {tab === 'export'        && <ExportImportManager workspaceId={workspaceId} projectId={projectId} />}
-        {tab === 'github'        && <GitHubProjectSettings workspaceId={workspaceId} projectId={projectId} />}
       </div>
     </div>
   );
 }
 
-// ── Status Manager ────────────────────────────────────────────────────────────
+// ── Section: General ─────────────────────────────────────────────────────────
 
-function StatusManager({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
-  const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState('#6366F1');
-  const [newIsDone, setNewIsDone] = useState(false);
+function GeneralSection({
+  workspaceId, projectId, project, onProjectUpdate,
+}: {
+  workspaceId: string;
+  projectId: string;
+  project: ProjectDetail;
+  onProjectUpdate: (p: ProjectDetail) => void;
+}) {
+  const router = useRouter();
+  const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(project.description ?? '');
+  const [color, setColor] = useState(project.color ?? '#6366F1');
   const [saving, setSaving] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editColor, setEditColor] = useState('');
+  const [confirmName, setConfirmName] = useState('');
+  const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const fetchStatuses = useCallback(() => {
-    api
-      .get<ProjectStatus[]>(`/workspaces/${workspaceId}/projects/${projectId}/statuses`)
-      .then((r) => setStatuses(r.data))
-      .finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
+  useEffect(() => {
+    setName(project.name);
+    setDescription(project.description ?? '');
+    setColor(project.color ?? '#6366F1');
+  }, [project.id]);
 
-  useEffect(() => { fetchStatuses(); }, [fetchStatuses]);
-
-  const addStatus = async () => {
-    if (!newName.trim()) return;
+  const saveGeneral = () => {
     setSaving(true);
-    try {
-      await api.post(`/workspaces/${workspaceId}/projects/${projectId}/statuses`, {
-        name: newName.trim(),
-        color: newColor,
-        is_done: newIsDone,
-      });
-      setNewName('');
-      setNewColor('#6366F1');
-      setNewIsDone(false);
-      fetchStatuses();
-    } finally {
-      setSaving(false);
-    }
+    api.patch<ProjectDetail>(`/workspaces/${workspaceId}/projects/${projectId}`, {
+      name: name.trim(),
+      description: description.trim() || null,
+      color,
+    })
+      .then((r) => { onProjectUpdate(r.data); toast.success('Project saved'); })
+      .catch(() => toast.error('Failed to save'))
+      .finally(() => setSaving(false));
   };
 
-  const saveEdit = async (id: string) => {
-    setSaving(true);
-    try {
-      await api.patch(`/workspaces/${workspaceId}/projects/${projectId}/statuses/${id}`, {
-        name: editName,
-        color: editColor,
-      });
-      setEditingId(null);
-      fetchStatuses();
-    } finally {
-      setSaving(false);
-    }
+  const archiveProject = () => {
+    setArchiving(true);
+    api.patch(`/workspaces/${workspaceId}/projects/${projectId}`, { status: 'archived' })
+      .then(() => {
+        toast.success('Project archived');
+        router.push(`/workspaces/${workspaceId}`);
+      })
+      .catch(() => toast.error('Failed to archive'))
+      .finally(() => setArchiving(false));
   };
 
-  const deleteStatus = async (id: string) => {
-    if (!confirm('Delete this status? Tasks in it will move to "To Do".')) return;
-    await api.delete(`/workspaces/${workspaceId}/projects/${projectId}/statuses/${id}`);
-    fetchStatuses();
+  const deleteProject = () => {
+    setDeleting(true);
+    api.delete(`/workspaces/${workspaceId}/projects/${projectId}`)
+      .then(() => {
+        toast.success('Project deleted');
+        router.push(`/workspaces/${workspaceId}`);
+      })
+      .catch(() => { toast.error('Failed to delete'); setDeleting(false); });
   };
-
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Board Columns</h2>
-        <p className="text-xs text-gray-500 mb-4">Customize the columns on your kanban board. Default columns cannot be deleted.</p>
+    <div>
+      <div className="mb-8">
+        <h1 className="text-xl font-semibold">General</h1>
+        <p className="text-sm text-foreground-tertiary mt-1">Manage your project settings</p>
       </div>
 
-      <div className="space-y-2">
-        {statuses.map((s) => (
-          <div key={s.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
-            {editingId === s.id ? (
-              <>
-                <input title="Status color" type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
-                <input title="Status name" type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="flex-1 border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                <button type="button" onClick={() => saveEdit(s.id)} disabled={saving} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Save</button>
-                <button type="button" onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-              </>
-            ) : (
-              <>
-                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                <span className="flex-1 text-sm font-medium text-gray-700">{s.name}</span>
-                {s.is_default && <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">default</span>}
-                {s.is_done && <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">done</span>}
-                <button type="button" onClick={() => { setEditingId(s.id); setEditName(s.name); setEditColor(s.color); }} className="text-xs text-gray-400 hover:text-gray-600">Edit</button>
-                {!s.is_default && (
-                  <button type="button" onClick={() => deleteStatus(s.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
-                )}
-              </>
-            )}
+      {/* Project details card */}
+      <Card className="mb-6">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">Project details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-1.5">
+            <FormLabel htmlFor="proj-name">Project name</FormLabel>
+            <Input
+              id="proj-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
-        ))}
-      </div>
 
-      <div className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
-        <input title="New status color" type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0 flex-shrink-0" />
-        <input title="New status name" type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New status name…" className="flex-1 border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500" onKeyDown={(e) => e.key === 'Enter' && addStatus()} />
-        <label className="flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
-          <input title="Mark as done" type="checkbox" checked={newIsDone} onChange={(e) => setNewIsDone(e.target.checked)} className="rounded" />
-          Done column
-        </label>
-        <button type="button" onClick={addStatus} disabled={saving || !newName.trim()} className="text-xs bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50 flex-shrink-0">Add</button>
-      </div>
-    </div>
-  );
-}
+          <div className="space-y-1.5">
+            <FormLabel htmlFor="proj-desc">Description</FormLabel>
+            <Textarea
+              id="proj-desc"
+              value={description}
+              rows={3}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
 
-// ── Template Manager ──────────────────────────────────────────────────────────
-
-function TemplateManager({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
-  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-
-  const fetchTemplates = useCallback(() => {
-    api.get<TaskTemplate[]>(`/workspaces/${workspaceId}/projects/${projectId}/templates`)
-      .then((r) => setTemplates(r.data))
-      .finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
-
-  useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
-
-  const deleteTemplate = async (id: string) => {
-    if (!confirm('Delete this template?')) return;
-    await api.delete(`/workspaces/${workspaceId}/projects/${projectId}/templates/${id}`);
-    fetchTemplates();
-  };
-
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-gray-800 mb-1">Task Templates</h2>
-          <p className="text-xs text-gray-500">Pre-fill new tasks with default values.</p>
-        </div>
-        <button type="button" onClick={() => setShowForm(true)} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">+ New Template</button>
-      </div>
-
-      {templates.length === 0 && !showForm && <p className="text-sm text-gray-400 py-4 text-center">No templates yet.</p>}
-
-      {showForm && (
-        <TemplateForm workspaceId={workspaceId} projectId={projectId} onSave={() => { setShowForm(false); fetchTemplates(); }} onCancel={() => setShowForm(false)} />
-      )}
-
-      <div className="space-y-2">
-        {templates.map((t) => (
-          <div key={t.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800">{t.name}</p>
-              {t.default_title && <p className="text-xs text-gray-400 truncate">Title: {t.default_title}</p>}
+          <div className="space-y-1.5">
+            <FormLabel>Project color</FormLabel>
+            <div className="flex items-center gap-2 flex-wrap">
+              {PROJECT_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  aria-label={`Color ${c}`}
+                  className={cn(
+                    'w-7 h-7 rounded-full transition-all duration-150',
+                    color === c && 'ring-2 ring-offset-2 ring-primary scale-110',
+                  )}
+                  style={{ background: c }}
+                />
+              ))}
+              <div className="relative">
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  aria-label="Custom color"
+                  className="absolute inset-0 opacity-0 cursor-pointer w-7 h-7"
+                />
+                <div className="w-7 h-7 rounded-full border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-foreground-muted transition-colors">
+                  <Plus className="w-3 h-3 text-foreground-tertiary" />
+                </div>
+              </div>
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${t.priority === 'high' ? 'bg-red-100 text-red-600' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{t.priority}</span>
-            {t.estimate != null && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{t.estimate}pt</span>}
-            <button type="button" onClick={() => deleteTemplate(t.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+        </CardContent>
+        <CardFooter className="border-t border-border pt-4">
+          <Button onClick={saveGeneral} disabled={saving}>
+            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Save changes
+          </Button>
+        </CardFooter>
+      </Card>
 
-function TemplateForm({ workspaceId, projectId, onSave, onCancel }: { workspaceId: string; projectId: string; onSave: () => void; onCancel: () => void }) {
-  const nameRef = useRef<HTMLInputElement>(null);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', default_title: '', description: '', priority: 'medium' as TaskTemplate['priority'], estimate: '' });
-
-  const save = async () => {
-    if (!form.name.trim()) return;
-    setSaving(true);
-    try {
-      await api.post(`/workspaces/${workspaceId}/projects/${projectId}/templates`, {
-        name: form.name.trim(),
-        default_title: form.default_title.trim() || null,
-        description: form.description.trim() || null,
-        priority: form.priority,
-        estimate: form.estimate ? Number(form.estimate) : null,
-      });
-      onSave();
-    } finally { setSaving(false); }
-  };
-
-  useEffect(() => { nameRef.current?.focus(); }, []);
-  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  return (
-    <div className="bg-white border border-blue-200 rounded-xl p-4 space-y-3">
-      <h3 className="text-sm font-semibold text-gray-700">New Template</h3>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Template name *</label>
-          <input ref={nameRef} title="Template name" type="text" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Bug Report" className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Default task title</label>
-          <input title="Default task title" type="text" value={form.default_title} onChange={(e) => set('default_title', e.target.value)} placeholder="Leave blank to prompt user" className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Priority</label>
-          <select title="Priority" value={form.priority} onChange={(e) => set('priority', e.target.value)} className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Story points</label>
-          <input title="Story points" type="number" min="0" max="9999" value={form.estimate} onChange={(e) => set('estimate', e.target.value)} placeholder="Optional" className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-      </div>
-      <div>
-        <label className="text-xs text-gray-500 block mb-1">Default description</label>
-        <textarea title="Default description" value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="Optional…" className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-      </div>
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onCancel} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancel</button>
-        <button type="button" onClick={save} disabled={saving || !form.name.trim()} className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? 'Saving…' : 'Save Template'}</button>
-      </div>
-    </div>
-  );
-}
-
-// ── Automation Rules Manager ──────────────────────────────────────────────────
-
-const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string }[] = [
-  { value: 'task_created',    label: 'Task created' },
-  { value: 'status_changed',  label: 'Status changed' },
-  { value: 'due_date_reached', label: 'Due date reached' },
-  { value: 'assignee_added',  label: 'Assignee added' },
-  { value: 'comment_added',   label: 'Comment added' },
-];
-
-const ACTION_OPTIONS: { value: AutomationActionType; label: string }[] = [
-  { value: 'change_status',     label: 'Change status' },
-  { value: 'assign_user',       label: 'Assign user' },
-  { value: 'add_label',         label: 'Add label' },
-  { value: 'post_comment',      label: 'Post comment' },
-  { value: 'send_notification', label: 'Send notification' },
-];
-
-function AutomationRulesManager({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
-  const [rules, setRules] = useState<AutomationRule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', trigger_type: 'task_created' as AutomationTriggerType, action_type: 'change_status' as AutomationActionType, action_value: '' });
-
-  const fetchRules = useCallback(() => {
-    api.get<AutomationRule[]>(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules`)
-      .then((r) => setRules(r.data))
-      .finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
-
-  useEffect(() => { fetchRules(); }, [fetchRules]);
-
-  const save = async () => {
-    if (!form.name.trim()) return;
-    setSaving(true);
-    try {
-      await api.post(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules`, {
-        name: form.name.trim(), trigger_type: form.trigger_type, action_type: form.action_type,
-        action_config: form.action_value ? { value: form.action_value } : null,
-      });
-      setForm({ name: '', trigger_type: 'task_created', action_type: 'change_status', action_value: '' });
-      setShowForm(false);
-      fetchRules();
-    } finally { setSaving(false); }
-  };
-
-  const toggleActive = async (rule: AutomationRule) => {
-    await api.patch(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules/${rule.id}`, { is_active: !rule.is_active });
-    fetchRules();
-  };
-
-  const deleteRule = async (id: string) => {
-    if (!confirm('Delete this automation rule?')) return;
-    await api.delete(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules/${id}`);
-    fetchRules();
-  };
-
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-gray-800 mb-1">Automation Rules</h2>
-          <p className="text-xs text-gray-500">Trigger actions automatically when events occur.</p>
-        </div>
-        <button type="button" onClick={() => setShowForm(true)} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">+ New Rule</button>
-      </div>
-
-      {showForm && (
-        <div className="bg-white border border-blue-200 rounded-xl p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">New Automation Rule</h3>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Rule name *</label>
-            <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Notify on status change" className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+      {/* Danger zone card */}
+      <Card className="border-destructive/40">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-0">
+          {/* Archive */}
+          <div className="flex items-center justify-between py-3 border-b border-border">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">When (trigger)</label>
-              <select title="Trigger type" value={form.trigger_type} onChange={(e) => setForm({ ...form, trigger_type: e.target.value as AutomationTriggerType })} className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                {TRIGGER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Then (action)</label>
-              <select title="Action type" value={form.action_type} onChange={(e) => setForm({ ...form, action_type: e.target.value as AutomationActionType })} className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                {ACTION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Action value</label>
-            <input type="text" value={form.action_value} onChange={(e) => setForm({ ...form, action_value: e.target.value })} placeholder="Optional — depends on action type" className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancel</button>
-            <button type="button" onClick={save} disabled={saving || !form.name.trim()} className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? 'Saving…' : 'Create Rule'}</button>
-          </div>
-        </div>
-      )}
-
-      {rules.length === 0 && !showForm && <p className="text-sm text-gray-400 py-4 text-center">No automation rules yet.</p>}
-
-      <div className="space-y-2">
-        {rules.map((rule) => (
-          <div key={rule.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
-            <button type="button" onClick={() => toggleActive(rule)} title={rule.is_active ? 'Disable' : 'Enable'} className={`w-9 h-5 rounded-full transition-colors flex-shrink-0 relative ${rule.is_active ? 'bg-blue-600' : 'bg-gray-200'}`}>
-              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${rule.is_active ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </button>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800">{rule.name}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                When <span className="text-gray-600">{TRIGGER_OPTIONS.find((t) => t.value === rule.trigger_type)?.label ?? rule.trigger_type}</span>
-                {' → '}
-                <span className="text-gray-600">{ACTION_OPTIONS.find((a) => a.value === rule.action_type)?.label ?? rule.action_type}</span>
+              <p className="text-sm font-medium">Archive this project</p>
+              <p className="text-xs text-foreground-tertiary mt-0.5">
+                Hide from active projects. Can be restored later.
               </p>
             </div>
-            {rule.last_triggered && <span className="text-xs text-gray-400 flex-shrink-0">Last: {new Date(rule.last_triggered).toLocaleDateString()}</span>}
-            {rule.last_result && <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${rule.last_result === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>{rule.last_result}</span>}
-            <button type="button" onClick={() => deleteRule(rule.id)} className="text-xs text-red-400 hover:text-red-600 flex-shrink-0">Delete</button>
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-warning text-warning hover:bg-warning-subtle"
+                  />
+                }
+              >
+                <Archive className="w-4 h-4 mr-1.5" />Archive
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Archive &ldquo;{project.name}&rdquo;?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will hide the project from your active projects list. You can restore it later from workspace settings.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={archiving}
+                    onClick={archiveProject}
+                    className="bg-warning text-warning-foreground hover:bg-warning/90"
+                  >
+                    {archiving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Archive project
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
-        ))}
-      </div>
+
+          {/* Delete */}
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-medium">Delete this project</p>
+              <p className="text-xs text-foreground-tertiary mt-0.5">
+                Permanently delete all tasks, sprints, and data. Cannot be undone.
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger render={<Button variant="destructive" size="sm" />}>
+                <Trash2 className="w-4 h-4 mr-1.5" />Delete
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete &ldquo;{project.name}&rdquo;?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all tasks, sprints, members, and activity.
+                    This cannot be undone.
+                    <br /><br />
+                    Type <strong>{project.name}</strong> to confirm:
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <Input
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                  placeholder={project.name}
+                />
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={confirmName !== project.name || deleting}
+                    onClick={deleteProject}
+                    className="bg-destructive hover:bg-destructive/90"
+                  >
+                    {deleting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Delete project
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// ── Members Manager ───────────────────────────────────────────────────────────
+// ── Section: Members ─────────────────────────────────────────────────────────
 
-const ROLE_COLORS: Record<ProjectRole, string> = {
-  viewer: 'bg-gray-100 text-gray-600',
-  editor: 'bg-blue-100 text-blue-700',
-  manager: 'bg-purple-100 text-purple-700',
-};
-
-function MembersManager({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+function MembersSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const { user: currentUser } = useAuth();
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [wsMembers, setWsMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [addUserId, setAddUserId] = useState('');
   const [addRole, setAddRole] = useState<ProjectRole>('editor');
+  const [saving, setSaving] = useState(false);
 
-  const fetch = useCallback(() => {
+  const loadMembers = () => {
     Promise.all([
       api.get<ProjectMember[]>(`/workspaces/${workspaceId}/projects/${projectId}/members`),
       api.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`),
@@ -444,224 +527,787 @@ function MembersManager({ workspaceId, projectId }: { workspaceId: string; proje
       setMembers(m.data);
       setWsMembers(wm.data);
     }).finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
+  };
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { loadMembers(); }, [workspaceId, projectId]);
 
-  const addMember = async () => {
+  const addMember = () => {
     if (!addUserId) return;
     setSaving(true);
-    try {
-      await api.post(`/workspaces/${workspaceId}/projects/${projectId}/members`, { user_id: addUserId, role: addRole });
+    api.post(`/workspaces/${workspaceId}/projects/${projectId}/members`, {
+      user_id: addUserId,
+      role: addRole,
+    }).then(() => {
       setAddUserId('');
-      fetch();
-    } finally { setSaving(false); }
+      setInviteOpen(false);
+      loadMembers();
+    }).catch(() => toast.error('Failed to add member'))
+      .finally(() => setSaving(false));
   };
 
-  const changeRole = async (userId: string, role: ProjectRole) => {
-    await api.patch(`/workspaces/${workspaceId}/projects/${projectId}/members/${userId}`, { role });
-    fetch();
+  const changeRole = (userId: string, role: string) => {
+    api.patch(`/workspaces/${workspaceId}/projects/${projectId}/members/${userId}`, { role })
+      .then(() => loadMembers())
+      .catch(() => toast.error('Failed to update role'));
   };
 
-  const removeMember = async (userId: string) => {
-    if (!confirm('Remove this member from the project?')) return;
-    await api.delete(`/workspaces/${workspaceId}/projects/${projectId}/members/${userId}`);
-    fetch();
+  const removeMember = (userId: string) => {
+    api.delete(`/workspaces/${workspaceId}/projects/${projectId}/members/${userId}`)
+      .then(() => loadMembers())
+      .catch(() => toast.error('Failed to remove member'));
   };
 
   const memberIds = new Set(members.map((m) => m.user.id));
   const inviteable = wsMembers.filter((m) => !memberIds.has(m.id));
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Project Members</h2>
-        <p className="text-xs text-gray-500 mb-4">Control per-project access. Workspace owners and admins always have full access.</p>
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-xl font-semibold">Members</h1>
+          <p className="text-sm text-foreground-tertiary mt-1">
+            Control per-project access. Workspace owners always have full access.
+          </p>
+        </div>
+        <Button onClick={() => setInviteOpen((v) => !v)} size="sm">
+          <Plus className="w-4 h-4 mr-1.5" />Add member
+        </Button>
       </div>
 
-      {/* Add member */}
-      <div className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
-        <select
-          title="Workspace member to add"
-          value={addUserId}
-          onChange={(e) => setAddUserId(e.target.value)}
-          className="flex-1 border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
-          <option value="">Select workspace member…</option>
-          {inviteable.map((m) => (
-            <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
-          ))}
-        </select>
-        <select
-          title="Role"
-          value={addRole}
-          onChange={(e) => setAddRole(e.target.value as ProjectRole)}
-          className="border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
-          <option value="viewer">Viewer</option>
-          <option value="editor">Editor</option>
-          <option value="manager">Manager</option>
-        </select>
-        <button
-          type="button"
-          onClick={addMember}
-          disabled={saving || !addUserId}
-          className="text-xs bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50 flex-shrink-0"
-        >
-          Add
-        </button>
-      </div>
-
-      {members.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">No explicit project members yet.</p>}
-
-      <div className="space-y-2">
-        {members.map((m) => (
-          <div key={m.user.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
-            <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-              {m.user.name[0].toUpperCase()}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800">{m.user.name}</p>
-              <p className="text-xs text-gray-400">{m.user.email}</p>
+      {inviteOpen && (
+        <Card className="mb-6">
+          <CardContent className="pt-5">
+            <div className="flex gap-3 flex-wrap">
+              <select
+                title="Workspace member"
+                value={addUserId}
+                onChange={(e) => setAddUserId(e.target.value)}
+                className="flex-1 min-w-48 h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring"
+              >
+                <option value="">Select workspace member…</option>
+                {inviteable.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
+                ))}
+              </select>
+              <Select value={addRole} onValueChange={(v) => setAddRole(v as ProjectRole)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="editor">Editor</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={addMember} disabled={saving || !addUserId}>
+                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Add
+              </Button>
+              <Button variant="ghost" onClick={() => setInviteOpen(false)}>Cancel</Button>
             </div>
-            <select
-              title="Member role"
-              value={m.role}
-              onChange={(e) => changeRole(m.user.id, e.target.value as ProjectRole)}
-              className={`text-xs rounded-full px-2 py-0.5 font-medium border-0 outline-none cursor-pointer ${ROLE_COLORS[m.role]}`}
-            >
-              <option value="viewer">Viewer</option>
-              <option value="editor">Editor</option>
-              <option value="manager">Manager</option>
-            </select>
-            <button type="button" onClick={() => removeMember(m.user.id)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
-          </div>
-        ))}
-      </div>
+          </CardContent>
+        </Card>
+      )}
 
-      <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 space-y-1">
-        <p><span className="font-medium text-gray-700">Viewer</span> — read-only access to tasks and board</p>
-        <p><span className="font-medium text-gray-700">Editor</span> — can create and edit tasks</p>
-        <p><span className="font-medium text-gray-700">Manager</span> — full project access, can manage members and settings</p>
+      {members.length === 0 && (
+        <p className="text-sm text-foreground-muted text-center py-8">No explicit project members yet.</p>
+      )}
+
+      <Card>
+        <div className="divide-y divide-border">
+          {members.map((m) => (
+            <div key={m.user.id} className="flex items-center gap-3 px-5 py-3 hover:bg-accent/30 transition-colors">
+              <Avatar className="w-8 h-8 flex-shrink-0">
+                <AvatarFallback className="text-xs">{initials(m.user.name)}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  {m.user.name}
+                  {m.user.id === currentUser?.id && (
+                    <Badge variant="secondary" className="text-[10px]">You</Badge>
+                  )}
+                </p>
+                <p className="text-xs text-foreground-tertiary">{m.user.email}</p>
+              </div>
+              <Select
+                defaultValue={m.role}
+                disabled={m.user.id === currentUser?.id}
+                onValueChange={(v) => { if (v) changeRole(m.user.id, v); }}
+              >
+                <SelectTrigger size="sm" className="w-28 h-7 text-xs border-transparent hover:border-border transition-colors">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="editor">Editor</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-foreground-tertiary w-24 flex-shrink-0">
+                {format(new Date(m.created_at), 'MMM d, yyyy')}
+              </p>
+              {m.user.id !== currentUser?.id && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-destructive hover:bg-destructive-subtle hover:text-destructive"
+                  onClick={() => removeMember(m.user.id)}
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="mt-4 bg-muted/50 rounded-lg p-3 text-xs text-foreground-secondary space-y-1">
+        <p><span className="font-medium text-foreground">Viewer</span> — read-only access to tasks and board</p>
+        <p><span className="font-medium text-foreground">Editor</span> — can create and edit tasks</p>
+        <p><span className="font-medium text-foreground">Manager</span> — full project access, can manage members and settings</p>
       </div>
     </div>
   );
 }
 
-// ── Custom Fields Manager ─────────────────────────────────────────────────────
+// ── Section: Roles (placeholder) ─────────────────────────────────────────────
 
-const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
-  text: 'Text', number: 'Number', date: 'Date', select: 'Select', url: 'URL', checkbox: 'Checkbox',
-};
+function RolesSection() {
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-xl font-semibold">Roles</h1>
+        <p className="text-sm text-foreground-tertiary mt-1">Role definitions and permissions</p>
+      </div>
+      <Card>
+        <CardContent className="pt-6 pb-6">
+          <div className="space-y-4">
+            {(['viewer', 'editor', 'manager'] as const).map((role) => (
+              <div key={role} className="flex items-start gap-4 py-3 border-b border-border last:border-0">
+                <div className="w-20 flex-shrink-0">
+                  <Badge variant="secondary" className="capitalize text-xs">{role}</Badge>
+                </div>
+                <p className="text-sm text-foreground-secondary">
+                  {role === 'viewer' && 'Read-only access to tasks and board. Cannot create or modify tasks.'}
+                  {role === 'editor' && 'Can create, edit, and comment on tasks. Cannot manage project settings or members.'}
+                  {role === 'manager' && 'Full project access including settings, members, and all task operations.'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-function CustomFieldsManager({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+// ── Sortable Status Row ───────────────────────────────────────────────────────
+
+function SortableStatusRow({
+  status,
+  onUpdate,
+  onDelete,
+}: {
+  status: ProjectStatus;
+  onUpdate: (id: string, patch: Partial<ProjectStatus>) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes, listeners, setNodeRef, transform, transition, isDragging,
+  } = useSortable({ id: status.id });
+
+  const [localName, setLocalName] = useState(status.name);
+
+  useEffect(() => { setLocalName(status.name); }, [status.name]);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-card hover:border-border-strong transition-all group',
+        isDragging && 'opacity-50 z-50',
+      )}
+    >
+      {/* Drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab p-1 -ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <GripVertical className="w-4 h-4 text-foreground-muted" />
+      </div>
+
+      {/* Color picker */}
+      <Popover>
+        <PopoverTrigger
+          className="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-transparent hover:ring-border-strong transition-all cursor-pointer"
+          style={{ background: status.color }}
+          aria-label="Change color"
+        />
+        <PopoverContent className="w-auto p-3">
+          <div className="grid grid-cols-4 gap-2">
+            {STATUS_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onUpdate(status.id, { color: c })}
+                aria-label={`Color ${c}`}
+                className="w-7 h-7 rounded-full transition-transform hover:scale-110"
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Inline name edit */}
+      <input
+        value={localName}
+        onChange={(e) => setLocalName(e.target.value)}
+        onBlur={() => {
+          if (localName.trim() && localName !== status.name) {
+            onUpdate(status.id, { name: localName.trim() });
+          }
+        }}
+        aria-label="Status name"
+        className="flex-1 text-sm bg-transparent border-none outline-none focus:bg-muted rounded px-2 py-1 -mx-2 transition-colors"
+      />
+
+      {/* Done toggle */}
+      <div className="flex items-center gap-2 text-xs text-foreground-tertiary flex-shrink-0">
+        <span>Done</span>
+        <Switch
+          size="sm"
+          checked={status.is_done}
+          onCheckedChange={(v) => onUpdate(status.id, { is_done: v })}
+        />
+      </div>
+
+      {/* Default badge */}
+      {status.is_default && (
+        <Badge variant="secondary" className="text-[10px] flex-shrink-0">Default</Badge>
+      )}
+
+      {/* Delete */}
+      {!status.is_default && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-foreground-tertiary hover:text-destructive flex-shrink-0"
+          onClick={() => onDelete(status.id)}
+        >
+          <X className="w-3.5 h-3.5" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ── Section: Statuses ────────────────────────────────────────────────────────
+
+function StatusesSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState(STATUS_COLORS[4]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const loadStatuses = () => {
+    api.get<ProjectStatus[]>(`/workspaces/${workspaceId}/projects/${projectId}/statuses`)
+      .then((r) => setStatuses(r.data))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadStatuses(); }, [workspaceId, projectId]);
+
+  const updateStatus = (id: string, patch: Partial<ProjectStatus>) => {
+    api.patch(`/workspaces/${workspaceId}/projects/${projectId}/statuses/${id}`, patch)
+      .then(() => loadStatuses())
+      .catch(() => toast.error('Failed to update status'));
+  };
+
+  const deleteStatus = (id: string) => {
+    api.delete(`/workspaces/${workspaceId}/projects/${projectId}/statuses/${id}`)
+      .then(() => loadStatuses())
+      .catch(() => toast.error('Failed to delete status'));
+  };
+
+  const addStatus = () => {
+    if (!newName.trim()) return;
+    api.post(`/workspaces/${workspaceId}/projects/${projectId}/statuses`, {
+      name: newName.trim(),
+      color: newColor,
+      is_done: false,
+    }).then(() => {
+      setNewName('');
+      setNewColor(STATUS_COLORS[4]);
+      setAddingNew(false);
+      loadStatuses();
+    }).catch(() => toast.error('Failed to add status'));
+  };
+
+  const handleReorder = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = statuses.findIndex((s) => s.id === active.id);
+    const newIdx = statuses.findIndex((s) => s.id === over.id);
+    const reordered = arrayMove(statuses, oldIdx, newIdx);
+    setStatuses(reordered);
+    api.patch(`/workspaces/${workspaceId}/projects/${projectId}/statuses/reorder`, {
+      ids: reordered.map((s) => s.id),
+    }).catch(() => toast.error('Failed to save order'));
+  };
+
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-xl font-semibold">Statuses</h1>
+        <p className="text-sm text-foreground-tertiary mt-1">
+          Customize board columns. Drag to reorder.
+        </p>
+      </div>
+
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleReorder}>
+        <SortableContext items={statuses.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-1.5">
+            {statuses.map((s) => (
+              <SortableStatusRow
+                key={s.id}
+                status={s}
+                onUpdate={updateStatus}
+                onDelete={deleteStatus}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+
+      {addingNew ? (
+        <div className="mt-2 flex items-center gap-3 px-3 py-2.5 rounded-lg border border-primary bg-card">
+          <Popover>
+            <PopoverTrigger
+              className="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-transparent hover:ring-border-strong transition-all cursor-pointer"
+              style={{ background: newColor }}
+              aria-label="Choose color"
+            />
+            <PopoverContent className="w-auto p-3">
+              <div className="grid grid-cols-4 gap-2">
+                {STATUS_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setNewColor(c)}
+                    aria-label={`Color ${c}`}
+                    className="w-7 h-7 rounded-full transition-transform hover:scale-110"
+                    style={{ background: c }}
+                  />
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addStatus();
+              if (e.key === 'Escape') setAddingNew(false);
+            }}
+            placeholder="Status name…"
+            aria-label="New status name"
+            className="flex-1 text-sm bg-transparent border-none outline-none"
+          />
+          <Button size="sm" onClick={addStatus} disabled={!newName.trim()}>Add</Button>
+          <Button size="sm" variant="ghost" onClick={() => setAddingNew(false)}>Cancel</Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingNew(true)}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-foreground-tertiary hover:text-foreground hover:bg-accent/50 rounded-lg transition-all w-full mt-2"
+        >
+          <Plus className="w-4 h-4" />Add status
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Sortable Label Row ────────────────────────────────────────────────────────
+
+function SortableLabelRow({
+  label,
+  onUpdate,
+  onDelete,
+}: {
+  label: LabelWithCount;
+  onUpdate: (id: string, patch: { name?: string; color?: string }) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes, listeners, setNodeRef, transform, transition, isDragging,
+  } = useSortable({ id: label.id });
+
+  const [localName, setLocalName] = useState(label.name);
+
+  useEffect(() => { setLocalName(label.name); }, [label.name]);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-card hover:border-border-strong transition-all group',
+        isDragging && 'opacity-50',
+      )}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab p-1 -ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <GripVertical className="w-4 h-4 text-foreground-muted" />
+      </div>
+
+      <Popover>
+        <PopoverTrigger
+          className="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-transparent hover:ring-border-strong transition-all cursor-pointer"
+          style={{ background: label.color }}
+          aria-label="Change color"
+        />
+        <PopoverContent className="w-auto p-3">
+          <div className="grid grid-cols-4 gap-2">
+            {STATUS_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onUpdate(label.id, { color: c })}
+                aria-label={`Color ${c}`}
+                className="w-7 h-7 rounded-full transition-transform hover:scale-110"
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      <input
+        value={localName}
+        onChange={(e) => setLocalName(e.target.value)}
+        onBlur={() => {
+          if (localName.trim() && localName !== label.name) {
+            onUpdate(label.id, { name: localName.trim() });
+          }
+        }}
+        aria-label="Label name"
+        className="flex-1 text-sm bg-transparent border-none outline-none focus:bg-muted rounded px-2 py-1 -mx-2 transition-colors"
+      />
+
+      {label.tasks_count !== undefined && (
+        <span className="text-xs text-foreground-tertiary bg-muted px-1.5 py-0.5 rounded-full flex-shrink-0">
+          {label.tasks_count} tasks
+        </span>
+      )}
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-foreground-tertiary hover:text-destructive flex-shrink-0"
+        onClick={() => onDelete(label.id)}
+      >
+        <X className="w-3.5 h-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+// ── Section: Labels ───────────────────────────────────────────────────────────
+
+function LabelsSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const [labels, setLabels] = useState<LabelWithCount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState(STATUS_COLORS[0]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const loadLabels = () => {
+    api.get<LabelWithCount[]>(`/workspaces/${workspaceId}/labels`)
+      .then((r) => setLabels(r.data))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadLabels(); }, [workspaceId, projectId]);
+
+  const updateLabel = (id: string, patch: { name?: string; color?: string }) => {
+    api.patch(`/workspaces/${workspaceId}/labels/${id}`, patch)
+      .then(() => loadLabels())
+      .catch(() => toast.error('Failed to update label'));
+  };
+
+  const deleteLabel = (id: string) => {
+    api.delete(`/workspaces/${workspaceId}/labels/${id}`)
+      .then(() => loadLabels())
+      .catch(() => toast.error('Failed to delete label'));
+  };
+
+  const addLabel = () => {
+    if (!newName.trim()) return;
+    api.post(`/workspaces/${workspaceId}/labels`, {
+      name: newName.trim(),
+      color: newColor,
+    }).then(() => {
+      setNewName('');
+      setNewColor(STATUS_COLORS[0]);
+      setAddingNew(false);
+      loadLabels();
+    }).catch(() => toast.error('Failed to add label'));
+  };
+
+  const handleReorder = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = labels.findIndex((l) => l.id === active.id);
+    const newIdx = labels.findIndex((l) => l.id === over.id);
+    setLabels(arrayMove(labels, oldIdx, newIdx));
+  };
+
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-xl font-semibold">Labels</h1>
+        <p className="text-sm text-foreground-tertiary mt-1">
+          Manage workspace labels. Drag to reorder.
+        </p>
+      </div>
+
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleReorder}>
+        <SortableContext items={labels.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-1.5">
+            {labels.map((l) => (
+              <SortableLabelRow
+                key={l.id}
+                label={l}
+                onUpdate={updateLabel}
+                onDelete={deleteLabel}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+
+      {addingNew ? (
+        <div className="mt-2 flex items-center gap-3 px-3 py-2.5 rounded-lg border border-primary bg-card">
+          <Popover>
+            <PopoverTrigger
+              className="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-transparent hover:ring-border-strong transition-all cursor-pointer"
+              style={{ background: newColor }}
+              aria-label="Choose color"
+            />
+            <PopoverContent className="w-auto p-3">
+              <div className="grid grid-cols-4 gap-2">
+                {STATUS_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setNewColor(c)}
+                    aria-label={`Color ${c}`}
+                    className="w-7 h-7 rounded-full transition-transform hover:scale-110"
+                    style={{ background: c }}
+                  />
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addLabel();
+              if (e.key === 'Escape') setAddingNew(false);
+            }}
+            placeholder="Label name…"
+            aria-label="New label name"
+            className="flex-1 text-sm bg-transparent border-none outline-none"
+          />
+          <Button size="sm" onClick={addLabel} disabled={!newName.trim()}>Add</Button>
+          <Button size="sm" variant="ghost" onClick={() => setAddingNew(false)}>Cancel</Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingNew(true)}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-foreground-tertiary hover:text-foreground hover:bg-accent/50 rounded-lg transition-all w-full mt-2"
+        >
+          <Plus className="w-4 h-4" />Add label
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Section: Custom Fields ────────────────────────────────────────────────────
+
+function CustomFieldsSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
   const [fields, setFields] = useState<CustomFieldDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', field_type: 'text' as CustomFieldType, options: '', is_required: false });
+  const [form, setForm] = useState({
+    name: '', field_type: 'text' as CustomFieldType, options: '', is_required: false,
+  });
 
-  const fetch = useCallback(() => {
+  const loadFields = () => {
     api.get<CustomFieldDefinition[]>(`/workspaces/${workspaceId}/projects/${projectId}/custom-fields`)
       .then((r) => setFields(r.data))
       .finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
+  };
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { loadFields(); }, [workspaceId, projectId]);
 
-  const addField = async () => {
+  const addField = () => {
     if (!form.name.trim()) return;
     setSaving(true);
-    try {
-      await api.post(`/workspaces/${workspaceId}/projects/${projectId}/custom-fields`, {
-        name: form.name.trim(),
-        field_type: form.field_type,
-        options: form.field_type === 'select' ? form.options.split(',').map((s) => s.trim()).filter(Boolean) : null,
-        is_required: form.is_required,
-      });
+    api.post(`/workspaces/${workspaceId}/projects/${projectId}/custom-fields`, {
+      name: form.name.trim(),
+      field_type: form.field_type,
+      options: form.field_type === 'select'
+        ? form.options.split(',').map((s) => s.trim()).filter(Boolean)
+        : null,
+      is_required: form.is_required,
+    }).then(() => {
       setForm({ name: '', field_type: 'text', options: '', is_required: false });
       setShowForm(false);
-      fetch();
-    } finally { setSaving(false); }
+      loadFields();
+    }).catch(() => toast.error('Failed to add field'))
+      .finally(() => setSaving(false));
   };
 
-  const deleteField = async (id: string) => {
-    if (!confirm('Delete this custom field? All task values will be removed.')) return;
-    await api.delete(`/workspaces/${workspaceId}/projects/${projectId}/custom-fields/${id}`);
-    fetch();
+  const deleteField = (id: string) => {
+    api.delete(`/workspaces/${workspaceId}/projects/${projectId}/custom-fields/${id}`)
+      .then(() => loadFields())
+      .catch(() => toast.error('Failed to delete field'));
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-base font-semibold text-gray-800 mb-1">Custom Fields</h2>
-          <p className="text-xs text-gray-500">Add extra data fields to tasks in this project.</p>
+          <h1 className="text-xl font-semibold">Custom Fields</h1>
+          <p className="text-sm text-foreground-tertiary mt-1">Add extra data fields to tasks.</p>
         </div>
-        <button type="button" onClick={() => setShowForm(true)} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">+ Add Field</button>
+        <Button size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="w-4 h-4 mr-1.5" />Add field
+        </Button>
       </div>
 
       {showForm && (
-        <div className="bg-white border border-blue-200 rounded-xl p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">New Custom Field</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Field name *</label>
+        <Card className="mb-6 border-primary/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">New Custom Field</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <FormLabel>Field name</FormLabel>
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="e.g. Story URL"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <FormLabel htmlFor="field-type">Field type</FormLabel>
+                <select
+                  id="field-type"
+                  title="Field type"
+                  value={form.field_type}
+                  onChange={(e) => setForm({ ...form, field_type: e.target.value as CustomFieldType })}
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring"
+                >
+                  {(Object.keys(FIELD_TYPE_LABELS) as CustomFieldType[]).map((t) => (
+                    <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {form.field_type === 'select' && (
+              <div className="space-y-1.5">
+                <FormLabel>Options (comma-separated)</FormLabel>
+                <Input
+                  value={form.options}
+                  onChange={(e) => setForm({ ...form, options: e.target.value })}
+                  placeholder="Option A, Option B, Option C"
+                />
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-sm text-foreground-secondary cursor-pointer select-none">
               <input
-                type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Story URL" className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                type="checkbox"
+                checked={form.is_required}
+                onChange={(e) => setForm({ ...form, is_required: e.target.checked })}
+                className="rounded"
               />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Field type</label>
-              <select
-                title="Field type" value={form.field_type} onChange={(e) => setForm({ ...form, field_type: e.target.value as CustomFieldType })}
-                className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                {(Object.keys(FIELD_TYPE_LABELS) as CustomFieldType[]).map((t) => (
-                  <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {form.field_type === 'select' && (
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Options (comma-separated)</label>
-              <input
-                type="text" value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })}
-                placeholder="Option A, Option B, Option C" className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          )}
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-            <input type="checkbox" checked={form.is_required} onChange={(e) => setForm({ ...form, is_required: e.target.checked })} className="rounded" />
-            Required field
-          </label>
-          <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancel</button>
-            <button type="button" onClick={addField} disabled={saving || !form.name.trim()} className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? 'Saving…' : 'Add Field'}</button>
-          </div>
-        </div>
+              Required field
+            </label>
+          </CardContent>
+          <CardFooter className="border-t border-border pt-4 gap-2">
+            <Button onClick={addField} disabled={saving || !form.name.trim()}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Add field
+            </Button>
+            <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
+          </CardFooter>
+        </Card>
       )}
 
-      {fields.length === 0 && !showForm && <p className="text-sm text-gray-400 py-4 text-center">No custom fields yet.</p>}
+      {fields.length === 0 && !showForm && (
+        <p className="text-sm text-foreground-muted text-center py-8">No custom fields yet.</p>
+      )}
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {fields.map((f) => (
-          <div key={f.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
+          <div
+            key={f.id}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card hover:border-border-strong transition-all group"
+          >
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800">{f.name}</p>
+              <p className="text-sm font-medium">{f.name}</p>
               {f.options && f.options.length > 0 && (
-                <p className="text-xs text-gray-400 truncate">{f.options.join(', ')}</p>
+                <p className="text-xs text-foreground-muted truncate">{f.options.join(', ')}</p>
               )}
             </div>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{FIELD_TYPE_LABELS[f.field_type]}</span>
-            {f.is_required && <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full">required</span>}
-            <button type="button" onClick={() => deleteField(f.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+            <Badge variant="secondary" className="text-[10px]">{FIELD_TYPE_LABELS[f.field_type]}</Badge>
+            {f.is_required && (
+              <Badge variant="destructive" className="text-[10px]">required</Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-foreground-tertiary hover:text-destructive"
+              onClick={() => deleteField(f.id)}
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
           </div>
         ))}
       </div>
@@ -669,276 +1315,742 @@ function CustomFieldsManager({ workspaceId, projectId }: { workspaceId: string; 
   );
 }
 
-// ── Export / Import Manager ───────────────────────────────────────────────────
+// ── Section: Templates ────────────────────────────────────────────────────────
 
-function ExportImportManager({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
-  const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
-  const [importing, setImporting] = useState(false);
-  const [importFormat, setImportFormat] = useState<'json' | 'csv'>('json');
-  const [importJob, setImportJob] = useState<ImportJob | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+function TemplatesSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
 
-  const handleExport = () => {
-    const token = localStorage.getItem('token');
-    const url = `/api/workspaces/${workspaceId}/projects/${projectId}/export?format=${exportFormat}`;
-    const a = document.createElement('a');
-    a.href = url;
-    // Trigger download via fetch to include auth header
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const objectUrl = URL.createObjectURL(blob);
-        a.href = objectUrl;
-        a.download = `project-export.${exportFormat}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(objectUrl);
-      });
+  const loadTemplates = () => {
+    api.get<TaskTemplate[]>(`/workspaces/${workspaceId}/projects/${projectId}/templates`)
+      .then((r) => setTemplates(r.data))
+      .finally(() => setLoading(false));
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImporting(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('format', importFormat);
-      const { data } = await api.post<{ job_id: string }>(`/workspaces/${workspaceId}/projects/${projectId}/import`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setImportJob({ id: data.job_id, status: 'pending', format: importFormat, tasks_created: null, error_message: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-      // Poll for status
-      pollRef.current = setInterval(async () => {
-        const r = await api.get<ImportJob>(`/import-jobs/${data.job_id}`);
-        setImportJob(r.data);
-        if (r.data.status === 'completed' || r.data.status === 'failed') {
-          clearInterval(pollRef.current!);
-        }
-      }, 2000);
-    } finally {
-      setImporting(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
+  useEffect(() => { loadTemplates(); }, [workspaceId, projectId]);
+
+  const deleteTemplate = (id: string) => {
+    api.delete(`/workspaces/${workspaceId}/projects/${projectId}/templates/${id}`)
+      .then(() => loadTemplates())
+      .catch(() => toast.error('Failed to delete template'));
   };
 
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
 
   return (
-    <div className="space-y-6">
-      {/* Export */}
-      <div className="bg-white border rounded-xl p-5">
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Export Project</h2>
-        <p className="text-xs text-gray-500 mb-4">Download all project data including tasks, statuses, milestones, and sprints.</p>
-        <div className="flex items-center gap-3">
-          <select
-            title="Export format"
-            value={exportFormat}
-            onChange={(e) => setExportFormat(e.target.value as 'json' | 'csv')}
-            className="border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="json">JSON (full data)</option>
-            <option value="csv">CSV (tasks only)</option>
-          </select>
-          <button type="button" onClick={handleExport} className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-            Download Export
-          </button>
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-xl font-semibold">Templates</h1>
+          <p className="text-sm text-foreground-tertiary mt-1">Pre-fill new tasks with default values.</p>
         </div>
+        <Button size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="w-4 h-4 mr-1.5" />New template
+        </Button>
       </div>
 
-      {/* Import */}
-      <div className="bg-white border rounded-xl p-5">
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Import Tasks</h2>
-        <p className="text-xs text-gray-500 mb-4">Upload a JSON or CSV file exported from DevBoard. Existing tasks will not be affected.</p>
-        <div className="flex items-center gap-3">
-          <select
-            title="Import format"
-            value={importFormat}
-            onChange={(e) => setImportFormat(e.target.value as 'json' | 'csv')}
-            className="border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="json">JSON</option>
-            <option value="csv">CSV</option>
-          </select>
-          <label className={`text-sm px-4 py-2 rounded-lg cursor-pointer transition-colors ${importing ? 'bg-gray-100 text-gray-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-            {importing ? 'Uploading…' : 'Choose File & Import'}
-            <input ref={fileRef} type="file" accept=".json,.csv" className="hidden" disabled={importing} onChange={handleImport} />
-          </label>
-        </div>
+      {showForm && (
+        <TemplateForm
+          workspaceId={workspaceId}
+          projectId={projectId}
+          onSave={() => { setShowForm(false); loadTemplates(); }}
+          onCancel={() => setShowForm(false)}
+        />
+      )}
 
-        {importJob && (
-          <div className={`mt-4 p-3 rounded-lg text-sm ${
-            importJob.status === 'completed' ? 'bg-green-50 text-green-700' :
-            importJob.status === 'failed'    ? 'bg-red-50 text-red-600' :
-            'bg-blue-50 text-blue-700'
-          }`}>
-            {importJob.status === 'pending'    && 'Import queued…'}
-            {importJob.status === 'processing' && 'Importing tasks…'}
-            {importJob.status === 'completed'  && `Import complete — ${importJob.tasks_created ?? 0} tasks created.`}
-            {importJob.status === 'failed'     && `Import failed: ${importJob.error_message ?? 'Unknown error'}`}
+      {templates.length === 0 && !showForm && (
+        <p className="text-sm text-foreground-muted text-center py-8">No templates yet.</p>
+      )}
+
+      <div className="space-y-1.5">
+        {templates.map((t) => (
+          <div
+            key={t.id}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card hover:border-border-strong transition-all group"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{t.name}</p>
+              {t.default_title && (
+                <p className="text-xs text-foreground-muted truncate">Title: {t.default_title}</p>
+              )}
+            </div>
+            <Badge variant="secondary" className="capitalize text-[10px]">{t.priority}</Badge>
+            {t.estimate != null && (
+              <span className="text-xs text-foreground-tertiary bg-muted px-1.5 py-0.5 rounded-full">
+                {t.estimate}pt
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-foreground-tertiary hover:text-destructive"
+              onClick={() => deleteTemplate(t.id)}
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
 }
 
-// ── GitHub Project Settings ───────────────────────────────────────────────────
-
-function GitHubProjectSettings({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
-  const [wsConn, setWsConn] = useState<GitHubConnection | null>(null);
-  const [repo, setRepo] = useState('');
-  const [currentRepo, setCurrentRepo] = useState<string | null>(null);
-  const [issues, setIssues] = useState<GitHubIssue[]>([]);
-  const [loading, setLoading] = useState(true);
+function TemplateForm({
+  workspaceId, projectId, onSave, onCancel,
+}: {
+  workspaceId: string;
+  projectId: string;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const nameRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
-  const [loadingIssues, setLoadingIssues] = useState(false);
-  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    name: '', default_title: '', description: '',
+    priority: 'medium' as TaskTemplate['priority'], estimate: '',
+  });
 
-  useEffect(() => {
-    Promise.all([
-      api.get<GitHubConnection>(`/workspaces/${workspaceId}/github`),
-      api.get<{ github_repo: string | null }>(`/workspaces/${workspaceId}/projects/${projectId}`),
-    ]).then(([conn, proj]) => {
-      setWsConn(conn.data);
-      const r = proj.data.github_repo ?? null;
-      setCurrentRepo(r);
-      setRepo(r ?? '');
-    }).finally(() => setLoading(false));
-  }, [workspaceId, projectId]);
+  useEffect(() => { nameRef.current?.focus(); }, []);
 
-  const saveRepo = async () => {
+  const save = () => {
+    if (!form.name.trim()) return;
     setSaving(true);
-    setError('');
-    try {
-      const { data } = await api.patch<{ github_repo: string | null }>(
-        `/workspaces/${workspaceId}/projects/${projectId}/github/repo`,
-        { github_repo: repo.trim() || null }
-      );
-      setCurrentRepo(data.github_repo ?? null);
-      setRepo(data.github_repo ?? '');
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg ?? 'Failed to link repository.');
-    } finally {
-      setSaving(false);
-    }
+    api.post(`/workspaces/${workspaceId}/projects/${projectId}/templates`, {
+      name: form.name.trim(),
+      default_title: form.default_title.trim() || null,
+      description: form.description.trim() || null,
+      priority: form.priority,
+      estimate: form.estimate ? Number(form.estimate) : null,
+    }).then(() => onSave())
+      .catch(() => toast.error('Failed to save template'))
+      .finally(() => setSaving(false));
   };
 
-  const fetchIssues = async () => {
-    if (!currentRepo) return;
-    setLoadingIssues(true);
-    try {
-      const { data } = await api.get<GitHubIssue[]>(
-        `/workspaces/${workspaceId}/projects/${projectId}/github/issues`
-      );
-      setIssues(data);
-    } finally {
-      setLoadingIssues(false);
-    }
-  };
-
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
-
-  if (!wsConn?.connected) {
-    return (
-      <div className="bg-white border rounded-xl p-6 text-center space-y-2">
-        <p className="text-sm font-medium text-gray-700">GitHub is not connected for this workspace.</p>
-        <p className="text-xs text-gray-400">Go to Workspace Settings → GitHub to connect a Personal Access Token first.</p>
-      </div>
-    );
-  }
+  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">GitHub Repository</h2>
-        <p className="text-xs text-gray-500">Link this project to a GitHub repository to browse issues and link them to tasks.</p>
-      </div>
-
-      {/* Repo link */}
-      <div className="bg-white border rounded-xl p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          {currentRepo ? (
-            <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-medium">Linked: {currentRepo}</span>
-          ) : (
-            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">No repository linked</span>
-          )}
-        </div>
-        {error && <p className="text-xs text-red-500">{error}</p>}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={repo}
-            onChange={(e) => setRepo(e.target.value)}
-            placeholder="owner/repository"
-            className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-          />
-          <button
-            type="button"
-            onClick={saveRepo}
-            disabled={saving}
-            className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-lg hover:bg-black disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : repo.trim() ? 'Link Repo' : 'Unlink'}
-          </button>
-        </div>
-        <p className="text-xs text-gray-400">Format: <span className="font-mono">owner/repo</span> — leave blank to unlink.</p>
-      </div>
-
-      {/* Open issues browser */}
-      {currentRepo && (
-        <div className="bg-white border rounded-xl p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-700">Open Issues</h3>
-            <button
-              type="button"
-              onClick={fetchIssues}
-              disabled={loadingIssues}
-              className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+    <Card className="mb-6 border-primary/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">New Template</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <FormLabel>Template name *</FormLabel>
+            <Input
+              ref={nameRef}
+              value={form.name}
+              onChange={(e) => set('name', e.target.value)}
+              placeholder="e.g. Bug Report"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <FormLabel>Default task title</FormLabel>
+            <Input
+              value={form.default_title}
+              onChange={(e) => set('default_title', e.target.value)}
+              placeholder="Leave blank to prompt"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <FormLabel htmlFor="tmpl-priority">Priority</FormLabel>
+            <select
+              id="tmpl-priority"
+              title="Priority"
+              value={form.priority}
+              onChange={(e) => set('priority', e.target.value)}
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring"
             >
-              {loadingIssues ? 'Loading…' : issues.length > 0 ? 'Refresh' : 'Load Issues'}
-            </button>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
           </div>
-
-          {issues.length === 0 && !loadingIssues && (
-            <p className="text-xs text-gray-400 text-center py-2">Click &ldquo;Load Issues&rdquo; to fetch open issues from GitHub.</p>
-          )}
-
-          <div className="space-y-1.5 max-h-80 overflow-y-auto">
-            {issues.map((issue) => (
-              <div key={issue.number} className="flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
-                <span className="text-xs text-gray-400 font-mono mt-0.5 flex-shrink-0">#{issue.number}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700 truncate">{issue.title}</p>
-                  {issue.labels.length > 0 && (
-                    <div className="flex gap-1 mt-0.5 flex-wrap">
-                      {issue.labels.map((l) => (
-                        <span
-                          key={l.name}
-                          className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600"
-                        >
-                          {l.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <a
-                  href={issue.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-gray-400 hover:text-blue-600 flex-shrink-0"
-                >
-                  ↗
-                </a>
-              </div>
-            ))}
+          <div className="space-y-1.5">
+            <FormLabel>Story points</FormLabel>
+            <Input
+              type="number"
+              min="0"
+              max="9999"
+              value={form.estimate}
+              onChange={(e) => set('estimate', e.target.value)}
+              placeholder="Optional"
+            />
           </div>
+        </div>
+        <div className="space-y-1.5">
+          <FormLabel>Default description</FormLabel>
+          <Textarea
+            value={form.description}
+            onChange={(e) => set('description', e.target.value)}
+            rows={3}
+            placeholder="Optional…"
+          />
+        </div>
+      </CardContent>
+      <CardFooter className="border-t border-border pt-4 gap-2">
+        <Button onClick={save} disabled={saving || !form.name.trim()}>
+          {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+          Save template
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+// ── Section: Sprints ──────────────────────────────────────────────────────────
+
+function SprintsSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const [sprints, setSprints] = useState<{ id: string; name: string; status: string; start_date?: string; end_date?: string; tasks_count?: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<typeof sprints>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`)
+      .then((r) => setSprints(r.data))
+      .finally(() => setLoading(false));
+  }, [workspaceId, projectId]);
+
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-xl font-semibold">Sprints</h1>
+        <p className="text-sm text-foreground-tertiary mt-1">View and manage project sprints.</p>
+      </div>
+
+      {sprints.length === 0 && (
+        <p className="text-sm text-foreground-muted text-center py-8">No sprints yet.</p>
+      )}
+
+      <div className="space-y-1.5">
+        {sprints.map((s) => (
+          <div
+            key={s.id}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{s.name}</p>
+              {(s.start_date || s.end_date) && (
+                <p className="text-xs text-foreground-muted">
+                  {s.start_date ? format(new Date(s.start_date), 'MMM d') : '?'}
+                  {' — '}
+                  {s.end_date ? format(new Date(s.end_date), 'MMM d, yyyy') : '?'}
+                </p>
+              )}
+            </div>
+            <Badge
+              variant={s.status === 'active' ? 'default' : 'secondary'}
+              className="capitalize text-[10px]"
+            >
+              {s.status}
+            </Badge>
+            {s.tasks_count != null && (
+              <span className="text-xs text-foreground-tertiary">{s.tasks_count} tasks</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Section: Milestones ───────────────────────────────────────────────────────
+
+function MilestonesSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const [milestones, setMilestones] = useState<{ id: string; name: string; status: string; due_date?: string; progress?: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<typeof milestones>(`/workspaces/${workspaceId}/projects/${projectId}/milestones`)
+      .then((r) => setMilestones(r.data))
+      .finally(() => setLoading(false));
+  }, [workspaceId, projectId]);
+
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-xl font-semibold">Milestones</h1>
+        <p className="text-sm text-foreground-tertiary mt-1">View and manage project milestones.</p>
+      </div>
+
+      {milestones.length === 0 && (
+        <p className="text-sm text-foreground-muted text-center py-8">No milestones yet.</p>
+      )}
+
+      <div className="space-y-1.5">
+        {milestones.map((m) => (
+          <div
+            key={m.id}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{m.name}</p>
+              {m.due_date && (
+                <p className="text-xs text-foreground-muted">
+                  Due {format(new Date(m.due_date), 'MMM d, yyyy')}
+                </p>
+              )}
+            </div>
+            {m.progress != null && (
+              <span className="text-xs text-foreground-tertiary">{m.progress}%</span>
+            )}
+            <Badge
+              variant={m.status === 'open' ? 'default' : 'secondary'}
+              className="capitalize text-[10px]"
+            >
+              {m.status}
+            </Badge>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Section: Automations ──────────────────────────────────────────────────────
+
+interface RuleEditorState {
+  id?: string;
+  name: string;
+  trigger_type: AutomationTriggerType;
+  action_type: AutomationActionType;
+  action_value: string;
+}
+
+function AutomationsSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const [rules, setRules] = useState<AutomationRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorState, setEditorState] = useState<RuleEditorState>({
+    name: '',
+    trigger_type: 'task_created',
+    action_type: 'change_status',
+    action_value: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const loadRules = () => {
+    api.get<AutomationRule[]>(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules`)
+      .then((r) => setRules(r.data))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadRules(); }, [workspaceId, projectId]);
+
+  const openEditor = (rule?: AutomationRule) => {
+    if (rule) {
+      setEditorState({
+        id: rule.id,
+        name: rule.name,
+        trigger_type: rule.trigger_type,
+        action_type: rule.action_type,
+        action_value: (rule.action_config?.value as string) ?? '',
+      });
+    } else {
+      setEditorState({
+        name: '', trigger_type: 'task_created', action_type: 'change_status', action_value: '',
+      });
+    }
+    setEditorOpen(true);
+  };
+
+  const saveRule = () => {
+    if (!editorState.name.trim()) return;
+    setSaving(true);
+    const payload = {
+      name: editorState.name.trim(),
+      trigger_type: editorState.trigger_type,
+      action_type: editorState.action_type,
+      action_config: editorState.action_value ? { value: editorState.action_value } : null,
+    };
+    const req = editorState.id
+      ? api.patch(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules/${editorState.id}`, payload)
+      : api.post(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules`, payload);
+    req
+      .then(() => { setEditorOpen(false); loadRules(); })
+      .catch(() => toast.error('Failed to save rule'))
+      .finally(() => setSaving(false));
+  };
+
+  const toggleRule = (id: string, is_active: boolean) => {
+    api.patch(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules/${id}`, { is_active })
+      .then(() => loadRules())
+      .catch(() => toast.error('Failed to update rule'));
+  };
+
+  const deleteRule = (id: string) => {
+    api.delete(`/workspaces/${workspaceId}/projects/${projectId}/automation-rules/${id}`)
+      .then(() => loadRules())
+      .catch(() => toast.error('Failed to delete rule'));
+  };
+
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-xl font-semibold">Automations</h1>
+          <p className="text-sm text-foreground-tertiary mt-1">
+            Trigger actions automatically when events occur.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => openEditor()}>
+          <Plus className="w-4 h-4 mr-1.5" />Create rule
+        </Button>
+      </div>
+
+      {rules.length === 0 && (
+        <div className="text-center py-12 flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
+            <Workflow className="w-6 h-6 text-foreground-muted" />
+          </div>
+          <p className="text-sm font-medium text-foreground">No automation rules</p>
+          <p className="text-xs text-foreground-muted">
+            Automate repetitive tasks by creating trigger-action rules.
+          </p>
+          <Button size="sm" onClick={() => openEditor()}>Create your first rule</Button>
         </div>
       )}
+
+      <div className="space-y-3">
+        {rules.map((rule) => (
+          <Card key={rule.id} className="hover:border-border-strong transition-all group">
+            <CardContent className="p-4 flex items-start gap-4">
+              <div className="w-8 h-8 rounded-lg bg-primary-subtle flex items-center justify-center flex-shrink-0">
+                <Workflow className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{rule.name}</p>
+                <p className="text-xs text-foreground-tertiary mt-0.5">
+                  When{' '}
+                  <span className="text-foreground-secondary font-medium">
+                    {TRIGGER_OPTIONS.find((t) => t.value === rule.trigger_type)?.label ?? rule.trigger_type}
+                  </span>
+                  {' → '}
+                  Then{' '}
+                  <span className="text-foreground-secondary font-medium">
+                    {ACTION_OPTIONS.find((a) => a.value === rule.action_type)?.label ?? rule.action_type}
+                  </span>
+                </p>
+                {rule.last_triggered && (
+                  <p className="text-[10px] text-foreground-muted mt-1">
+                    Last triggered {new Date(rule.last_triggered).toLocaleDateString()}
+                    {rule.last_result && (
+                      <span className={cn(
+                        'ml-1.5 px-1 py-0.5 rounded',
+                        rule.last_result === 'success' ? 'text-success' : 'text-destructive',
+                      )}>
+                        {rule.last_result}
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Switch
+                  checked={rule.is_active}
+                  onCheckedChange={(v) => toggleRule(rule.id, v)}
+                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="inline-flex items-center justify-center h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity rounded-md hover:bg-accent text-foreground-tertiary"
+                    aria-label="Rule options"
+                  >
+                    <MoreHorizontal className="w-3.5 h-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => openEditor(rule)}>Edit</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={() => deleteRule(rule.id)}>
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Rule editor Sheet */}
+      <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[520px] flex flex-col gap-0 p-0" showCloseButton={false}>
+          <SheetHeader className="border-b border-border px-6 py-4">
+            <SheetTitle>{editorState.id ? 'Edit rule' : 'New automation rule'}</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            <div className="space-y-1.5">
+              <FormLabel>Rule name</FormLabel>
+              <Input
+                value={editorState.name}
+                onChange={(e) => setEditorState({ ...editorState, name: e.target.value })}
+                placeholder="e.g. Notify on status change"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-foreground-muted">
+                Trigger — When this happens
+              </p>
+              <div className="space-y-1">
+                {TRIGGER_OPTIONS.map((t) => (
+                  <label
+                    key={t.value}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors',
+                      editorState.trigger_type === t.value
+                        ? 'border-primary bg-primary-subtle'
+                        : 'border-border hover:bg-accent/50',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="trigger"
+                      value={t.value}
+                      checked={editorState.trigger_type === t.value}
+                      onChange={() => setEditorState({ ...editorState, trigger_type: t.value })}
+                      className="text-primary"
+                    />
+                    <span className="text-sm">{t.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-foreground-muted">
+                Action — Then do this
+              </p>
+              <div className="space-y-1">
+                {ACTION_OPTIONS.map((a) => (
+                  <label
+                    key={a.value}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors',
+                      editorState.action_type === a.value
+                        ? 'border-primary bg-primary-subtle'
+                        : 'border-border hover:bg-accent/50',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="action"
+                      value={a.value}
+                      checked={editorState.action_type === a.value}
+                      onChange={() => setEditorState({ ...editorState, action_type: a.value })}
+                      className="text-primary"
+                    />
+                    <span className="text-sm">{a.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <FormLabel>Action value</FormLabel>
+              <Input
+                value={editorState.action_value}
+                onChange={(e) => setEditorState({ ...editorState, action_value: e.target.value })}
+                placeholder="Optional — depends on action type"
+              />
+              <p className="text-xs text-foreground-muted">
+                e.g. for &ldquo;Change status&rdquo; enter the status name
+              </p>
+            </div>
+          </div>
+          <SheetFooter className="border-t border-border px-6 py-4 flex-row gap-2">
+            <Button onClick={saveRule} disabled={saving || !editorState.name.trim()}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {editorState.id ? 'Save changes' : 'Create rule'}
+            </Button>
+            <Button variant="ghost" onClick={() => setEditorOpen(false)}>Cancel</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+// ── Section: Webhooks ─────────────────────────────────────────────────────────
+
+function WebhooksSection({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: '', url: '', events: [] as WebhookEvent[],
+  });
+
+  const loadWebhooks = () => {
+    api.get<Webhook[]>(`/workspaces/${workspaceId}/projects/${projectId}/webhooks`)
+      .then((r) => setWebhooks(r.data))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadWebhooks(); }, [workspaceId, projectId]);
+
+  const toggleEvent = (ev: WebhookEvent) => {
+    setForm((f) => ({
+      ...f,
+      events: f.events.includes(ev) ? f.events.filter((e) => e !== ev) : [...f.events, ev],
+    }));
+  };
+
+  const createWebhook = () => {
+    if (!form.name.trim() || !form.url.trim() || form.events.length === 0) return;
+    setSaving(true);
+    api.post(`/workspaces/${workspaceId}/projects/${projectId}/webhooks`, {
+      name: form.name.trim(),
+      url: form.url.trim(),
+      events: form.events,
+    }).then(() => {
+      setForm({ name: '', url: '', events: [] });
+      setFormOpen(false);
+      loadWebhooks();
+    }).catch(() => toast.error('Failed to create webhook'))
+      .finally(() => setSaving(false));
+  };
+
+  const toggleWebhook = (id: string, is_active: boolean) => {
+    api.patch(`/workspaces/${workspaceId}/projects/${projectId}/webhooks/${id}`, { is_active })
+      .then(() => loadWebhooks())
+      .catch(() => toast.error('Failed to update webhook'));
+  };
+
+  const deleteWebhook = (id: string) => {
+    api.delete(`/workspaces/${workspaceId}/projects/${projectId}/webhooks/${id}`)
+      .then(() => loadWebhooks())
+      .catch(() => toast.error('Failed to delete webhook'));
+  };
+
+  if (loading) return <p className="text-sm text-foreground-muted">Loading…</p>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-xl font-semibold">Webhooks</h1>
+          <p className="text-sm text-foreground-tertiary mt-1">
+            Receive HTTP POST notifications when events occur.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setFormOpen(true)}>
+          <Plus className="w-4 h-4 mr-1.5" />Add webhook
+        </Button>
+      </div>
+
+      {formOpen && (
+        <Card className="mb-6 border-primary/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">New Webhook</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <FormLabel>Name</FormLabel>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Slack notifications"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <FormLabel>Payload URL</FormLabel>
+              <Input
+                type="url"
+                value={form.url}
+                onChange={(e) => setForm({ ...form, url: e.target.value })}
+                placeholder="https://…"
+              />
+            </div>
+            <div className="space-y-2">
+              <FormLabel>Events</FormLabel>
+              <div className="grid grid-cols-2 gap-1.5">
+                {WEBHOOK_EVENTS.map((ev) => (
+                  <label
+                    key={ev.value}
+                    className="flex items-center gap-2 text-sm cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.events.includes(ev.value)}
+                      onChange={() => toggleEvent(ev.value)}
+                      className="rounded"
+                    />
+                    {ev.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter className="border-t border-border pt-4 gap-2">
+            <Button
+              onClick={createWebhook}
+              disabled={saving || !form.name.trim() || !form.url.trim() || form.events.length === 0}
+            >
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Create webhook
+            </Button>
+            <Button variant="ghost" onClick={() => setFormOpen(false)}>Cancel</Button>
+          </CardFooter>
+        </Card>
+      )}
+
+      {webhooks.length === 0 && !formOpen && (
+        <p className="text-sm text-foreground-muted text-center py-8">No webhooks configured yet.</p>
+      )}
+
+      <div className="space-y-3">
+        {webhooks.map((wh) => (
+          <Card key={wh.id} className="hover:border-border-strong transition-all group">
+            <CardContent className="p-4 flex items-start gap-4">
+              <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                <WebhookIcon className="w-4 h-4 text-foreground-muted" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{wh.name}</p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <p className="text-xs text-foreground-muted font-mono truncate max-w-xs">{wh.url}</p>
+                  <a
+                    href={wh.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open ${wh.url}`}
+                    className="text-foreground-muted hover:text-foreground flex-shrink-0"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="flex gap-1 mt-1 flex-wrap">
+                  {wh.events.map((ev) => (
+                    <Badge key={ev} variant="secondary" className="text-[10px]">{ev}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Switch
+                  checked={wh.is_active}
+                  onCheckedChange={(v) => toggleWebhook(wh.id, v)}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-foreground-tertiary hover:text-destructive"
+                  onClick={() => deleteWebhook(wh.id)}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
