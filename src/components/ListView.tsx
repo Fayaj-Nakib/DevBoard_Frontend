@@ -278,14 +278,14 @@ export default function ListView({
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex -space-x-1">
-                          {task.assignees.slice(0, 3).map((a) => (
+                          {(task.assignees ?? []).slice(0, 3).map((a) => (
                             <Avatar key={a.id} size="sm" className="border border-background">
                               <AvatarFallback className="text-[9px]">{initials(a.name)}</AvatarFallback>
                             </Avatar>
                           ))}
-                          {task.assignees.length > 3 && (
+                          {(task.assignees ?? []).length > 3 && (
                             <span className="w-6 h-6 rounded-full bg-muted text-foreground-muted text-[9px] font-bold flex items-center justify-center border border-background">
-                              +{task.assignees.length - 3}
+                              +{(task.assignees ?? []).length - 3}
                             </span>
                           )}
                         </div>
@@ -303,7 +303,7 @@ export default function ListView({
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1 flex-wrap">
-                          {task.labels.slice(0, 2).map((l) => (
+                          {(task.labels ?? []).slice(0, 2).map((l) => (
                             <span
                               key={l.id}
                               className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium border border-border bg-muted text-foreground-secondary"
@@ -314,8 +314,8 @@ export default function ListView({
                               {l.name}
                             </span>
                           ))}
-                          {task.labels.length > 2 && (
-                            <span className="text-[10px] text-foreground-muted">+{task.labels.length - 2}</span>
+                          {(task.labels ?? []).length > 2 && (
+                            <span className="text-[10px] text-foreground-muted">+{(task.labels ?? []).length - 2}</span>
                           )}
                         </div>
                       </td>

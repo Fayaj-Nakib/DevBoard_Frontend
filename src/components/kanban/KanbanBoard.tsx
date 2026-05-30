@@ -319,9 +319,9 @@ function TaskCard({
       </div>
 
       {/* Labels */}
-      {task.labels.length > 0 && (
+      {(task.labels ?? []).length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
-          {task.labels.slice(0, 2).map((l) => (
+          {(task.labels ?? []).slice(0, 2).map((l) => (
             <span
               key={l.id}
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-foreground-secondary"
@@ -332,9 +332,9 @@ function TaskCard({
               {l.name}
             </span>
           ))}
-          {task.labels.length > 2 && (
+          {(task.labels ?? []).length > 2 && (
             <span className="text-[10px] text-foreground-tertiary px-1">
-              +{task.labels.length - 2}
+              +{(task.labels ?? []).length - 2}
             </span>
           )}
         </div>

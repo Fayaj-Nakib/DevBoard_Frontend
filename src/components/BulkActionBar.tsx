@@ -55,8 +55,12 @@ export default function BulkActionBar({ selectedIds, workspaceId, projectId, onC
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`).then((r) => setMembers(r.data));
-    api.get<Label[]>(`/workspaces/${workspaceId}/labels`).then((r) => setLabels(r.data));
+    api.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`)
+      .then((r) => setMembers(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+    api.get<Label[]>(`/workspaces/${workspaceId}/labels`)
+      .then((r) => setLabels(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
   }, [workspaceId]);
 
   const runBulk = async (action: string, payload: Record<string, unknown>) => {
@@ -137,7 +141,9 @@ export default function BulkActionBar({ selectedIds, workspaceId, projectId, onC
                 onClick={() => runBulk('add_label', { label_id: l.id })}
                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
               >
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
+                <svg width="10" height="10" viewBox="0 0 10 10" className="flex-shrink-0">
+                  <circle cx="5" cy="5" r="5" fill={l.color} />
+                </svg>
                 {l.name}
               </button>
             ))}

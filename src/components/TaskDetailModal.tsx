@@ -215,7 +215,7 @@ export default function TaskDetailModal({
 
   const toggleAssignee = async (memberId: string) => {
     if (!task) return;
-    const current = task.assignees.map((a) => a.id);
+    const current = (task.assignees ?? []).map((a) => a.id);
     const next = current.includes(memberId)
       ? current.filter((id) => id !== memberId)
       : [...current, memberId];
@@ -224,7 +224,7 @@ export default function TaskDetailModal({
 
   const toggleLabel = async (labelId: string) => {
     if (!task) return;
-    const hasIt = task.labels.some((l) => l.id === labelId);
+    const hasIt = (task.labels ?? []).some((l) => l.id === labelId);
     try {
       if (hasIt) {
         await api.delete(`/tasks/${taskId}/labels/${labelId}`);
@@ -560,19 +560,19 @@ export default function TaskDetailModal({
               <PopoverTrigger
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-muted hover:bg-accent transition-colors cursor-pointer outline-none"
               >
-                {task.assignees.length === 0 ? (
+                {(task.assignees ?? []).length === 0 ? (
                   <>
                     <UserPlus className="w-3.5 h-3.5 text-foreground-tertiary" />
                     <span className="text-foreground-secondary">Assign</span>
                   </>
                 ) : (
                   <div className="flex -space-x-1">
-                    {task.assignees.slice(0, 3).map((a) => (
+                    {(task.assignees ?? []).slice(0, 3).map((a) => (
                       <MemberAvatar key={a.id} name={a.name} id={a.id} />
                     ))}
-                    {task.assignees.length > 3 && (
+                    {(task.assignees ?? []).length > 3 && (
                       <span className="w-5 h-5 rounded-full bg-muted border border-background text-[9px] flex items-center justify-center text-foreground-secondary">
-                        +{task.assignees.length - 3}
+                        +{(task.assignees ?? []).length - 3}
                       </span>
                     )}
                   </div>
@@ -595,7 +595,7 @@ export default function TaskDetailModal({
                     >
                       <MemberAvatar name={m.name} id={m.id} size="md" />
                       <span className="text-foreground flex-1 text-left">{m.name}</span>
-                      {task.assignees.find((a) => a.id === m.id) && (
+                      {(task.assignees ?? []).find((a) => a.id === m.id) && (
                         <Check className="w-3.5 h-3.5 text-primary" />
                       )}
                     </button>
@@ -772,7 +772,7 @@ export default function TaskDetailModal({
                 Labels
               </p>
               <div className="flex flex-wrap items-center gap-1.5">
-                {task.labels.map((l) => (
+                {(task.labels ?? []).map((l) => (
                   <span
                     key={l.id}
                     className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border border-border bg-muted text-foreground-secondary"
@@ -790,10 +790,7 @@ export default function TaskDetailModal({
                   </PopoverTrigger>
                   <PopoverContent className="w-56 p-2">
                     <div className="max-h-48 overflow-y-auto space-y-0.5">
-                      {task.labels.concat(
-                        /* we need allLabels — but we don't fetch labels in this version */
-                        [],
-                      ).map((l) => (
+                      {(task.labels ?? []).map((l) => (
                         <button
                           key={l.id}
                           type="button"
@@ -804,12 +801,12 @@ export default function TaskDetailModal({
                             <circle cx="5" cy="5" r="5" fill={l.color} />
                           </svg>
                           {l.name}
-                          {task.labels.some((tl) => tl.id === l.id) && (
+                          {(task.labels ?? []).some((tl) => tl.id === l.id) && (
                             <Check className="w-3.5 h-3.5 ml-auto text-primary" />
                           )}
                         </button>
                       ))}
-                      {task.labels.length === 0 && (
+                      {(task.labels ?? []).length === 0 && (
                         <p className="text-xs text-foreground-tertiary px-2 py-1">
                           No labels on this task
                         </p>

@@ -53,7 +53,11 @@ export function useTasks(
       .get<Record<string, Task[]>>(
         `/workspaces/${workspaceId}/projects/${projectId}/tasks${queryStr}`,
       )
-      .then((r) => setTasks(r.data))
+      .then((r) => {
+        const data = r.data;
+        setTasks(data && typeof data === 'object' && !Array.isArray(data) ? data : {});
+      })
+      .catch(() => setTasks({}))
       .finally(() => setLoading(false));
   }, [workspaceId, projectId, queryStr]);
 

@@ -461,7 +461,7 @@ function TaskRow({ task, done = false }: { task: Task; done?: boolean }) {
         </span>
       )}
       <div className="flex -space-x-1 flex-shrink-0">
-        {task.assignees.slice(0, 2).map((a) => (
+        {(task.assignees ?? []).slice(0, 2).map((a) => (
           <Avatar key={a.id} size="sm" className="border border-background">
             <AvatarFallback className="text-[9px]">{initials(a.name)}</AvatarFallback>
           </Avatar>

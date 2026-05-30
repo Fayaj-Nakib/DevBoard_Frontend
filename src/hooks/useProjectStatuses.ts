@@ -12,7 +12,8 @@ export function useProjectStatuses(workspaceId: string, projectId: string) {
   useEffect(() => {
     api
       .get<ProjectStatus[]>(`/workspaces/${workspaceId}/projects/${projectId}/statuses`)
-      .then((r) => setStatuses(r.data))
+      .then((r) => setStatuses(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setStatuses([]))
       .finally(() => setLoading(false));
   }, [workspaceId, projectId, version]);
 
