@@ -1,8 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AlertCircle, ChevronDown } from 'lucide-react';
+import { format } from 'date-fns';
+
 import api from '@/lib/api';
+import { cn, initials, isOverdue } from '@/lib/utils';
 import type { Sprint, WorkloadMember } from '@/types';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 interface Props {
   workspaceId: string;
@@ -10,172 +20,165 @@ interface Props {
   onTaskClick: (taskId: string) => void;
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
-  high:   'text-red-500',
-  medium: 'text-yellow-500',
-  low:    'text-blue-400',
-};
-
 function loadColor(total: number): string {
-  if (total >= 10) return 'bg-red-500';
-  if (total >= 5)  return 'bg-amber-400';
-  return 'bg-green-400';
-}
-function loadLabel(total: number): string {
-  if (total >= 10) return 'Overloaded';
-  if (total >= 5)  return 'Busy';
-  return 'Healthy';
-}
-function loadTextColor(total: number): string {
-  if (total >= 10) return 'text-red-600';
-  if (total >= 5)  return 'text-amber-600';
-  return 'text-green-600';
+  if (total >= 10) return 'bg-destructive';
+  if (total >= 5)  return 'bg-warning';
+  return 'bg-success';
 }
 
 export default function WorkloadView({ workspaceId, projectId, onTaskClick }: Props) {
   const [members, setMembers] = useState<WorkloadMember[]>([]);
-  const [loading, setLoading] = useState(true);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [sprintId, setSprintId] = useState('');
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [version, setVersion] = useState(0);
-
-  const fetchWorkload = () => setVersion((v) => v + 1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    api
-      .get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`)
-      .then((r) => setSprints(r.data));
+    api.get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`)
+      .then((r) => setSprints(r.data))
+      .catch(() => {});
   }, [workspaceId, projectId]);
 
   useEffect(() => {
-    const params: Record<string, string> = {};
-    if (sprintId) params.sprint_id = sprintId;
-    api
-      .get<WorkloadMember[]>(`/workspaces/${workspaceId}/projects/${projectId}/workload`, { params })
-      .then((r) => setMembers(r.data))
+    const params = sprintId ? { sprint_id: sprintId } : {};
+    api.get<WorkloadMember[]>(`/workspaces/${workspaceId}/projects/${projectId}/workload`, { params })
+      .then((r) => { setMembers(r.data); setError(false); })
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [workspaceId, projectId, sprintId, version]);
-
-  const toggleExpand = (userId: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) { next.delete(userId); } else { next.add(userId); }
-      return next;
-    });
-  };
+  }, [workspaceId, projectId, sprintId, refreshKey]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-400 text-sm">Loading workload…</p>
+      <div className="px-6 py-4 space-y-4 animate-fade-in">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-8 w-36" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} className="h-40 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-6 py-4">
+        <div className="flex items-center gap-3 p-4 bg-destructive-subtle border border-destructive/20 rounded-lg text-sm text-destructive">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          Failed to load workload data.
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-destructive"
+            onClick={() => { setLoading(true); setError(false); setRefreshKey((k) => k + 1); }}
+          >
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div>
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <label className="text-xs text-gray-500 font-medium" htmlFor="wl-sprint">Sprint:</label>
+    <div className="px-6 py-4 animate-fade-in">
+      {/* Sprint filter */}
+      <div className="flex items-center gap-3 mb-5">
         <select
-          id="wl-sprint"
+          aria-label="Sprint filter"
           value={sprintId}
           onChange={(e) => setSprintId(e.target.value)}
-          className="text-xs border rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
+          className="h-8 text-xs bg-background border border-border rounded-md px-2 text-foreground-secondary focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="">All sprints</option>
           {sprints.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
-        <button type="button" onClick={fetchWorkload} className="ml-auto text-xs text-gray-400 hover:text-gray-600">
-          ↻ Refresh
-        </button>
       </div>
 
       {members.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 gap-2">
-          <p className="text-gray-500 text-sm font-medium">No assigned tasks</p>
-          <p className="text-gray-400 text-xs">Assign tasks to team members to see workload</p>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <span className="text-4xl mb-3">👥</span>
+          <p className="text-sm font-medium text-foreground-secondary mb-1">No workload data</p>
+          <p className="text-xs text-foreground-tertiary">Assign tasks to members to see workload</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {members.map((member) => {
-            const expanded = expandedIds.has(member.user.id);
-            const color = loadColor(member.total_tasks);
-            const label = loadLabel(member.total_tasks);
-            const textColor = loadTextColor(member.total_tasks);
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {members.map((m) => {
+            const load = m.total_tasks;
+            const barColor = loadColor(load);
 
             return (
-              <div key={member.user.id} className="bg-white border rounded-xl overflow-hidden">
-                {/* Card header */}
-                <div className={`h-1.5 ${color}`} />
-                <div className="p-4 pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800 leading-tight">{member.user.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{member.user.email}</p>
+              <Card key={m.user.id} className="hover:border-border-strong transition-all">
+                <CardContent className="p-4">
+                  {/* Member header */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <Avatar className="w-9 h-9 flex-shrink-0">
+                      <AvatarFallback className="text-xs">{initials(m.user.name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{m.user.name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className={cn('w-2 h-2 rounded-full flex-shrink-0', barColor)} />
+                        <span className="text-xs text-foreground-tertiary">
+                          {load} open · {m.overdue_count} overdue · {m.total_estimate} pts
+                        </span>
+                      </div>
                     </div>
-                    <span className={`text-xs font-medium ${textColor} flex-shrink-0`}>{label}</span>
                   </div>
 
-                  {/* Stats row */}
-                  <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
-                    <span>
-                      <span className="font-semibold text-gray-700">{member.total_tasks}</span> tasks
-                    </span>
-                    {member.overdue_count > 0 && (
-                      <span className="text-red-500 font-medium">
-                        {member.overdue_count} overdue
-                      </span>
-                    )}
-                    {member.total_estimate > 0 && (
-                      <span>{member.total_estimate} pts</span>
-                    )}
+                  {/* Capacity bar */}
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-3">
+                    <div
+                      className={cn('h-full rounded-full transition-all', barColor)}
+                      style={{ width: `${Math.min((load / 15) * 100, 100)}%` }}
+                    />
                   </div>
 
-                  {/* Expand toggle */}
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(member.user.id)}
-                    className="mt-2 text-xs text-blue-500 hover:text-blue-700 font-medium"
-                  >
-                    {expanded ? 'Hide tasks ▲' : 'Show tasks ▼'}
-                  </button>
-                </div>
-
-                {/* Task list */}
-                {expanded && (
-                  <div className="border-t divide-y max-h-60 overflow-y-auto">
-                    {member.tasks.map((task) => (
-                      <button
-                        key={task.id}
-                        type="button"
-                        onClick={() => onTaskClick(task.id)}
-                        className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-start gap-2">
-                          <span className={`text-xs mt-0.5 ${PRIORITY_COLOR[task.priority] ?? 'text-gray-400'}`}>●</span>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-xs truncate ${task.is_overdue ? 'text-red-600' : 'text-gray-700'}`}>
-                              {task.title}
-                            </p>
-                            {task.due_date && (
-                              <p className={`text-xs mt-0.5 ${task.is_overdue ? 'text-red-400' : 'text-gray-400'}`}>
-                                Due {new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </p>
+                  {/* Collapsible task list */}
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center justify-between w-full text-xs text-foreground-tertiary hover:text-foreground transition-colors py-1">
+                      <span>Show tasks ({m.tasks.length})</span>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 mt-2">
+                      {m.tasks.slice(0, 5).map((t) => (
+                        <div
+                          key={t.id}
+                          onClick={() => onTaskClick(t.id)}
+                          className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent/50 cursor-pointer transition-colors"
+                        >
+                          <span
+                            className={cn(
+                              'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                              t.status === 'done' ? 'bg-success' :
+                              t.status === 'in_progress' ? 'bg-primary' :
+                              t.is_overdue ? 'bg-destructive' : 'bg-muted-foreground',
                             )}
-                          </div>
-                          {task.estimate != null && (
-                            <span className="text-xs text-gray-400 flex-shrink-0">{task.estimate}pt</span>
+                          />
+                          <span className="flex-1 truncate">{t.title}</span>
+                          {t.due_date && (
+                            <span className={cn(
+                              'flex-shrink-0',
+                              isOverdue(t.due_date) ? 'text-destructive' : 'text-foreground-tertiary',
+                            )}>
+                              {format(new Date(t.due_date), 'MMM d')}
+                            </span>
                           )}
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      ))}
+                      {m.tasks.length > 5 && (
+                        <p className="text-xs text-foreground-muted px-2">
+                          +{m.tasks.length - 5} more
+                        </p>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
+                </CardContent>
+              </Card>
             );
           })}
         </div>

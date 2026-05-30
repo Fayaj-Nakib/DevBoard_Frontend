@@ -2,69 +2,108 @@
 
 import { useEffect, useState } from 'react';
 import {
-  BarChart,
-  Bar,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, PieChart, Pie,
 } from 'recharts';
+import { AlertCircle } from 'lucide-react';
+
 import api from '@/lib/api';
 import type { ProjectStats, VelocityData } from '@/types';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 interface Props {
   workspaceId: string;
   projectId: string;
 }
 
-interface StatCard {
-  label: string;
-  value: number | string;
-  sub?: string;
-  color: string;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
+      {label && <p className="font-medium mb-1">{label}</p>}
+      {payload.map((p: { name: string; value: number; color: string }, i: number) => (
+        <p key={i} className="flex items-center gap-1.5">
+          <svg width="6" height="6" viewBox="0 0 6 6" className="flex-shrink-0">
+            <circle cx="3" cy="3" r="3" fill={p.color} />
+          </svg>
+          {p.name}: {p.value}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 export default function AnalyticsDashboard({ workspaceId, projectId }: Props) {
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [velocity, setVelocity] = useState<VelocityData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [version, setVersion] = useState(0);
-
-  const fetchAll = () => { setLoading(true); setVersion((v) => v + 1); };
+  const [error, setError] = useState(false);
+  const [range, setRange] = useState('30');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     Promise.all([
       api.get<ProjectStats>(`/workspaces/${workspaceId}/projects/${projectId}/stats`),
       api.get<VelocityData>(`/workspaces/${workspaceId}/projects/${projectId}/velocity`),
     ])
-      .then(([s, v]) => {
-        setStats(s.data);
-        setVelocity(v.data);
-      })
+      .then(([s, v]) => { setStats(s.data); setVelocity(v.data); setError(false); })
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [workspaceId, projectId, version]);
+  }, [workspaceId, projectId, refreshKey]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-400 text-sm">Loading analytics…</p>
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-6 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+          <Skeleton className="h-8 w-36" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[220px] rounded-xl" />)}
+        </div>
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="max-w-5xl mx-auto px-6 py-6">
+        <div className="flex items-center gap-3 p-4 bg-destructive-subtle border border-destructive/20 rounded-lg text-sm text-destructive">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          Failed to load analytics.
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-destructive"
+            onClick={() => { setLoading(true); setError(false); setRefreshKey((k) => k + 1); }}
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!stats) return null;
 
-  const cards: StatCard[] = [
-    { label: 'Open Tasks',       value: stats.open_tasks,        color: 'border-l-blue-500' },
-    { label: 'Closed Tasks',     value: stats.closed_tasks,      color: 'border-l-green-500' },
-    { label: 'Overdue',          value: stats.overdue_tasks,     color: 'border-l-red-500' },
-    { label: 'Completion Rate',  value: `${stats.completion_rate}%`,
-      sub: `${stats.tasks_completed_last_30_days} done last 30d`,
-      color: 'border-l-purple-500' },
+  const statCards = [
+    { label: 'Open tasks',      value: stats.open_tasks,       color: 'text-primary' },
+    { label: 'Closed tasks',    value: stats.closed_tasks,     color: 'text-success' },
+    { label: 'Overdue',         value: stats.overdue_tasks,    color: 'text-destructive' },
+    { label: 'Completion rate', value: `${stats.completion_rate}%`, color: 'text-foreground', sub: `${stats.tasks_completed_last_30_days} done last 30d` },
   ];
 
   const pieData = stats.tasks_by_status.map((s) => ({
@@ -78,117 +117,141 @@ export default function AnalyticsDashboard({ workspaceId, projectId }: Props) {
     count: Number(a.count),
   }));
 
-  const velocityData = velocity?.sprints.map((s) => ({
-    name:      s.sprint_name,
+  const velocityData = (velocity?.sprints ?? []).slice(-6).map((s) => ({
+    name:      s.sprint_name.length > 10 ? s.sprint_name.slice(0, 10) + '…' : s.sprint_name,
     Planned:   s.planned_points,
     Completed: s.completed_points,
-  })) ?? [];
+  }));
 
   return (
-    <div className="space-y-6">
-      {/* Toolbar */}
+    <div className="max-w-5xl mx-auto px-6 py-6 space-y-6 animate-fade-in">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">Project Analytics</h2>
-        <button type="button" onClick={fetchAll} className="text-xs text-gray-400 hover:text-gray-600">
-          ↻ Refresh
-        </button>
+        <div>
+          <h1 className="text-xl font-semibold">Analytics</h1>
+        </div>
+        <Select value={range} onValueChange={(v) => { if (v) setRange(v); }}>
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+            <SelectItem value="90">Last 90 days</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Metric cards */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((c) => (
-          <div key={c.label} className={`bg-white border rounded-xl p-4 border-l-4 ${c.color}`}>
-            <p className="text-2xl font-bold text-gray-800">{c.value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{c.label}</p>
-            {c.sub && <p className="text-xs text-gray-400 mt-1">{c.sub}</p>}
-          </div>
+        {statCards.map((c) => (
+          <Card key={c.label}>
+            <CardContent className="p-5">
+              <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
+              <p className="text-xs text-foreground-tertiary mt-0.5">{c.label}</p>
+              {c.sub && <p className="text-xs text-foreground-muted mt-1">{c.sub}</p>}
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Tasks by status — donut */}
         {pieData.length > 0 && (
-          <div className="bg-white border rounded-xl p-5">
-            <p className="text-xs font-semibold text-gray-600 mb-3">Tasks by Status</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={85}
-                  paddingAngle={2}
-                >
-                  {pieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E5E7EB' }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          <Card>
+            <CardHeader className="pb-3 pt-5 px-5">
+              <CardTitle className="text-sm font-medium">Tasks by status</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={2}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         )}
 
         {/* Tasks by assignee — horizontal bar */}
         {assigneeData.length > 0 && (
-          <div className="bg-white border rounded-xl p-5">
-            <p className="text-xs font-semibold text-gray-600 mb-3">Tasks by Assignee</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={assigneeData}
-                layout="vertical"
-                margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
-                <XAxis type="number" tick={{ fontSize: 9, fill: '#9CA3AF' }} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={80}
-                  tick={{ fontSize: 10, fill: '#6B7280' }}
-                />
-                <Tooltip
-                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E5E7EB' }}
-                />
-                <Bar dataKey="count" name="Tasks" fill="#3B82F6" radius={[0, 4, 4, 0]} maxBarSize={20} />
-              </BarChart>
-            </ResponsiveContainer>
+          <Card>
+            <CardHeader className="pb-3 pt-5 px-5">
+              <CardTitle className="text-sm font-medium">Tasks by assignee</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={assigneeData}
+                  layout="vertical"
+                  margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(128,128,128,0.15)" />
+                  <XAxis type="number" tick={{ fontSize: 9, fill: '#888' }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={80}
+                    tick={{ fontSize: 10, fill: '#888' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="count" name="Tasks" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} maxBarSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Velocity by sprint — grouped bar */}
+        {velocityData.length > 0 && (
+          <Card className="md:col-span-2">
+            <CardHeader className="pb-3 pt-5 px-5">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium">Sprint velocity</CardTitle>
+                {velocity && (
+                  <p className="text-xs text-foreground-tertiary">
+                    Avg: <span className="font-semibold text-foreground">{velocity.average_velocity} pts</span>
+                  </p>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={velocityData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#888' }} />
+                  <YAxis tick={{ fontSize: 9, fill: '#888' }} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="Planned" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  <Bar dataKey="Completed" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {velocityData.length === 0 && assigneeData.length === 0 && pieData.length === 0 && (
+          <div className="md:col-span-2 text-center py-16 text-foreground-muted text-sm">
+            No chart data available yet.
           </div>
         )}
       </div>
-
-      {/* Velocity chart */}
-      {velocityData.length > 0 && (
-        <div className="bg-white border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-gray-600">Sprint Velocity (last 5 sprints)</p>
-            {velocity && (
-              <p className="text-xs text-gray-400">
-                Avg: <span className="font-semibold text-gray-600">{velocity.average_velocity} pts</span>
-              </p>
-            )}
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={velocityData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-              <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#9CA3AF' }} />
-              <YAxis tick={{ fontSize: 9, fill: '#9CA3AF' }} />
-              <Tooltip
-                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E5E7EB' }}
-              />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="Planned" fill="#E5E7EB" radius={[4, 4, 0, 0]} maxBarSize={32} />
-              <Bar dataKey="Completed" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={32} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
     </div>
   );
 }

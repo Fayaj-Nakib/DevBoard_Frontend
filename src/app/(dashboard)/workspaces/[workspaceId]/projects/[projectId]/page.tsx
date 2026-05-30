@@ -35,6 +35,8 @@ import BacklogView from '@/components/BacklogView';
 import TimelineView from '@/components/TimelineView';
 import CalendarView from '@/components/CalendarView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
+import ListView from '@/components/ListView';
+import WorkloadView from '@/components/WorkloadView';
 import TaskDetailModal from '@/components/TaskDetailModal';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import SprintPanel from '@/components/SprintPanel';
@@ -43,7 +45,7 @@ import CommandPalette from '@/components/CommandPalette';
 import type { Project, ProjectMember, Sprint, Task, TaskFilters } from '@/types';
 
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
-type ViewTab = 'board' | 'list' | 'timeline' | 'calendar' | 'backlog' | 'analytics';
+type ViewTab = 'board' | 'list' | 'timeline' | 'calendar' | 'backlog' | 'analytics' | 'workload';
 
 interface ViewDef {
   id: ViewTab;
@@ -58,6 +60,7 @@ const VIEWS: ViewDef[] = [
   { id: 'calendar',  label: 'Calendar',  icon: CalendarDays },
   { id: 'backlog',   label: 'Backlog',   icon: Layers      },
   { id: 'analytics', label: 'Analytics', icon: BarChart3   },
+  { id: 'workload',  label: 'Workload',  icon: UserPlus    },
 ];
 
 /* ─── Main page — wraps in Suspense for useSearchParams ─────────────────────── */
@@ -551,12 +554,17 @@ function ProjectPageInner() {
       )}
 
       {activeTab === 'list' && (
-        <div className="flex-1 overflow-y-auto min-h-0 p-6">
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <List className="w-10 h-10 text-foreground-muted mb-3" />
-            <p className="text-sm font-medium text-foreground-secondary mb-1">List view</p>
-            <p className="text-xs text-foreground-tertiary">Coming soon in 06_remaining.md</p>
-          </div>
+        <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+          <ListView
+            tasks={tasks}
+            statuses={statuses}
+            workspaceId={workspaceId}
+            projectId={projectId}
+            selectedIds={selectedIds}
+            onSelectTask={toggleSelectTask}
+            onTaskClick={handleTaskClick}
+            onRefresh={refresh}
+          />
         </div>
       )}
 
@@ -565,6 +573,16 @@ function ProjectPageInner() {
           <AnalyticsDashboard
             workspaceId={workspaceId}
             projectId={projectId}
+          />
+        </div>
+      )}
+
+      {activeTab === 'workload' && (
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <WorkloadView
+            workspaceId={workspaceId}
+            projectId={projectId}
+            onTaskClick={(taskId) => setSelectedTaskId(taskId)}
           />
         </div>
       )}
