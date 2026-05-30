@@ -32,11 +32,9 @@ export function AppShell({
   children,
   className,
 }: Props) {
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    return saved === 'true';
-  });
+  // Always start uncollapsed to match server render — reads from localStorage
+  // only via user interaction (toggleCollapsed), avoiding hydration mismatch.
+  const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState(workspaceNameProp ?? '');
 
@@ -51,7 +49,7 @@ export function AppShell({
   const toggleCollapsed = () => {
     setCollapsed((v) => {
       const next = !v;
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next)); } catch { /* ignore */ }
       return next;
     });
   };

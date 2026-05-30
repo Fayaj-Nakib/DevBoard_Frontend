@@ -1,9 +1,24 @@
 'use client';
-import { useAuth } from '@/context/AuthContext';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Plus, FolderKanban, Loader2 } from 'lucide-react';
+
+import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ThemeToggle } from '@/components/theme-toggle';
 import NotificationsBell from '@/components/NotificationsBell';
+import { UserAvatar } from '@/components/ui/user-avatar';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ChevronDown, LogOut } from 'lucide-react';
 
 interface Workspace {
   id: string;
@@ -22,78 +37,129 @@ export default function WorkspacesPage() {
   useEffect(() => {
     api.get('/workspaces')
       .then((r) => setWorkspaces(r.data))
+      .catch(() => setWorkspaces([]))
       .finally(() => setLoading(false));
   }, []);
 
-  const createWorkspace = async (e: React.FormEvent<HTMLFormElement>) => {
+  const createWorkspace = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newName.trim()) return;
     setCreating(true);
-    try {
-      const { data } = await api.post('/workspaces', { name: newName });
-      setWorkspaces((prev) => [...prev, data]);
-      setNewName('');
-    } finally {
-      setCreating(false);
-    }
+    api.post('/workspaces', { name: newName.trim() })
+      .then((r) => { setWorkspaces((prev) => [...prev, r.data]); setNewName(''); })
+      .catch(() => {})
+      .finally(() => setCreating(false));
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-800">DevBoard</h1>
-        <div className="flex items-center gap-3">
-          <NotificationsBell />
-          <span className="text-sm text-gray-500">{user?.name}</span>
-          <button
-            type="button"
-            onClick={logout}
-            className="text-sm text-red-500 hover:underline"
-          >
-            Logout
-          </button>
+    <div className="min-h-screen bg-background">
+      {/* Top nav */}
+      <header className="h-[52px] flex items-center justify-between px-6 border-b border-border bg-topnav sticky top-0 z-50">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>
+            </svg>
+          </div>
+          <span className="font-bold text-sm text-foreground tracking-tight">DevBoard</span>
         </div>
-      </nav>
 
-      <div className="max-w-4xl mx-auto p-6">
-        <h2 className="text-xl font-semibold mb-6">Your Workspaces</h2>
+        <div className="flex items-center gap-1.5">
+          <ThemeToggle />
+          <NotificationsBell />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent transition-colors outline-none"
+              aria-label="User menu"
+            >
+              <UserAvatar name={user?.name ?? '?'} id={user?.id} size="sm" />
+              <span className="hidden md:block text-sm font-medium text-foreground max-w-[100px] truncate">
+                {user?.name}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hidden md:block" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <div className="px-3 py-2 border-b border-border">
+                <p className="text-sm font-medium text-foreground truncate">{user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={logout}
+                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
 
+      {/* Body */}
+      <main className="max-w-3xl mx-auto px-6 py-10">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-foreground">Your Workspaces</h1>
+          <p className="text-sm text-foreground-tertiary mt-1">
+            Select a workspace or create a new one
+          </p>
+        </div>
+
+        {/* Create form */}
         <form onSubmit={createWorkspace} className="flex gap-3 mb-8">
-          <input
-            type="text"
+          <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="New workspace name…"
-            className="flex-1 border rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1"
           />
-          <button
-            type="submit"
-            disabled={creating}
-            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
-          >
-            {creating ? 'Creating…' : 'Create'}
-          </button>
+          <Button type="submit" disabled={creating || !newName.trim()}>
+            {creating ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 mr-1.5" />
+            )}
+            Create
+          </Button>
         </form>
 
+        {/* Workspace grid */}
         {loading ? (
-          <p className="text-gray-400 text-sm">Loading workspaces…</p>
-        ) : workspaces.length === 0 ? (
-          <p className="text-gray-400 text-sm">No workspaces yet. Create one above.</p>
-        ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-24 rounded-xl" />
+            ))}
+          </div>
+        ) : workspaces.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-xl bg-primary-subtle flex items-center justify-center mb-3">
+              <FolderKanban className="w-6 h-6 text-primary" />
+            </div>
+            <p className="text-sm font-medium text-foreground-secondary mb-1">No workspaces yet</p>
+            <p className="text-xs text-foreground-tertiary">Create your first workspace above.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {workspaces.map((ws) => (
-              <div
+              <Card
                 key={ws.id}
                 onClick={() => router.push(`/workspaces/${ws.id}/projects`)}
-                className="bg-white border rounded-xl p-5 hover:shadow-sm transition-shadow cursor-pointer"
+                className="p-5 hover:border-border-strong hover:shadow-sm hover:-translate-y-[1px] transition-all duration-150 cursor-pointer"
               >
-                <h3 className="font-medium text-gray-800">{ws.name}</h3>
-                <p className="text-sm text-gray-400 mt-1">{ws.slug}</p>
-              </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-primary-subtle flex items-center justify-center flex-shrink-0">
+                    <FolderKanban className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-foreground truncate">{ws.name}</h3>
+                    <p className="text-xs text-foreground-tertiary mt-0.5 font-mono truncate">{ws.slug}</p>
+                  </div>
+                </div>
+              </Card>
             ))}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
