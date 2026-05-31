@@ -27,32 +27,32 @@ export default function WorkspaceSettingsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b px-6 py-3.5 flex items-center justify-between sticky top-0 z-10">
+    <div className="min-h-screen bg-background">
+      <nav className="bg-card border-b px-6 py-3.5 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => router.push(`/workspaces/${workspaceId}/projects`)}
-            className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1"
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
             ← Projects
           </button>
-          <span className="text-gray-200 text-lg">/</span>
-          <h1 className="text-sm font-semibold text-gray-800">Workspace Settings</h1>
+          <span className="text-border text-lg">/</span>
+          <h1 className="text-sm font-semibold text-foreground">Workspace Settings</h1>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">{user?.name}</span>
+          <span className="text-sm text-muted-foreground">{user?.name}</span>
           <button type="button" onClick={logout} className="text-sm text-red-400 hover:text-red-600">Logout</button>
         </div>
       </nav>
 
       <div className="max-w-3xl mx-auto p-6">
-        <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1 w-fit">
+        <div className="flex gap-1 mb-6 bg-muted rounded-xl p-1 w-fit">
           <button
             type="button"
             onClick={() => setTab('webhooks')}
             className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
-              tab === 'webhooks' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
+              tab === 'webhooks' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Webhooks
@@ -61,7 +61,7 @@ export default function WorkspaceSettingsPage() {
             type="button"
             onClick={() => setTab('profile')}
             className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
-              tab === 'profile' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
+              tab === 'profile' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             My Profile
@@ -70,7 +70,7 @@ export default function WorkspaceSettingsPage() {
             type="button"
             onClick={() => setTab('members')}
             className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
-              tab === 'members' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
+              tab === 'members' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Members
@@ -79,7 +79,7 @@ export default function WorkspaceSettingsPage() {
             type="button"
             onClick={() => setTab('security')}
             className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
-              tab === 'security' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
+              tab === 'security' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Security
@@ -88,7 +88,7 @@ export default function WorkspaceSettingsPage() {
             type="button"
             onClick={() => setTab('github')}
             className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${
-              tab === 'github' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'
+              tab === 'github' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             GitHub
@@ -171,14 +171,14 @@ function WebhookManager({ workspaceId }: { workspaceId: string }) {
     alert('Test ping dispatched.');
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+  if (loading) return <p className="text-muted-foreground text-sm">Loading…</p>;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-gray-800 mb-1">Webhooks</h2>
-          <p className="text-xs text-gray-500">Receive HTTP POST notifications when events occur in this workspace.</p>
+          <h2 className="text-base font-semibold text-foreground mb-1">Webhooks</h2>
+          <p className="text-xs text-muted-foreground">Receive HTTP POST notifications when events occur in this workspace.</p>
         </div>
         <button
           type="button"
@@ -190,32 +190,32 @@ function WebhookManager({ workspaceId }: { workspaceId: string }) {
       </div>
 
       {showForm && (
-        <div className="bg-white border border-blue-200 rounded-xl p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">New Webhook</h3>
+        <div className="bg-card border border-blue-200 dark:border-blue-800 rounded-xl p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">New Webhook</h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Name *</label>
+              <label className="text-xs text-muted-foreground block mb-1">Name *</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. Slack notifications"
-                className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-background text-foreground"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Endpoint URL *</label>
+              <label className="text-xs text-muted-foreground block mb-1">Endpoint URL *</label>
               <input
                 type="url"
                 value={form.url}
                 onChange={(e) => setForm({ ...form, url: e.target.value })}
                 placeholder="https://…"
-                className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-background text-foreground"
               />
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-2">Events *</label>
+            <label className="text-xs text-muted-foreground block mb-2">Events *</label>
             <div className="flex flex-wrap gap-2">
               {ALL_EVENTS.map((ev) => (
                 <label key={ev} className="flex items-center gap-1.5 text-xs cursor-pointer">
@@ -225,13 +225,13 @@ function WebhookManager({ workspaceId }: { workspaceId: string }) {
                     onChange={() => toggleEvent(ev)}
                     className="rounded"
                   />
-                  <span className="text-gray-700 font-mono">{ev}</span>
+                  <span className="text-foreground font-mono">{ev}</span>
                 </label>
               ))}
             </div>
           </div>
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5">
+            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5">
               Cancel
             </button>
             <button
@@ -247,37 +247,37 @@ function WebhookManager({ workspaceId }: { workspaceId: string }) {
       )}
 
       {webhooks.length === 0 && !showForm && (
-        <p className="text-sm text-gray-400 py-4 text-center">No webhooks configured yet.</p>
+        <p className="text-sm text-muted-foreground py-4 text-center">No webhooks configured yet.</p>
       )}
 
       <div className="space-y-2">
         {webhooks.map((wh) => (
-          <div key={wh.id} className="bg-white border rounded-xl overflow-hidden">
+          <div key={wh.id} className="bg-card border rounded-xl overflow-hidden">
             <div className="px-4 py-3 flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => toggleActive(wh)}
                 title={wh.is_active ? 'Disable' : 'Enable'}
-                className={`w-9 h-5 rounded-full transition-colors flex-shrink-0 relative ${wh.is_active ? 'bg-blue-600' : 'bg-gray-200'}`}
+                className={`w-9 h-5 rounded-full transition-colors flex-shrink-0 relative ${wh.is_active ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${wh.is_active ? 'translate-x-4' : 'translate-x-0.5'}`} />
               </button>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800">{wh.name}</p>
-                <p className="text-xs text-gray-400 truncate">{wh.url}</p>
+                <p className="text-sm font-medium text-foreground">{wh.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{wh.url}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => testWebhook(wh.id)}
-                  className="text-xs text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-2 py-0.5"
+                  className="text-xs text-blue-500 hover:text-blue-700 border border-blue-200 dark:border-blue-800 rounded px-2 py-0.5"
                 >
                   Test
                 </button>
                 <button
                   type="button"
                   onClick={() => setExpandedId(expandedId === wh.id ? null : wh.id)}
-                  className="text-xs text-gray-400 hover:text-gray-600"
+                  className="text-xs text-muted-foreground hover:text-foreground"
                 >
                   {expandedId === wh.id ? 'Hide' : 'Deliveries'}
                 </button>
@@ -294,7 +294,7 @@ function WebhookManager({ workspaceId }: { workspaceId: string }) {
             {/* Events chips */}
             <div className="px-4 pb-2 flex flex-wrap gap-1">
               {wh.events.map((ev) => (
-                <span key={ev} className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{ev}</span>
+                <span key={ev} className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-mono">{ev}</span>
               ))}
             </div>
 
@@ -312,7 +312,7 @@ function WebhookManager({ workspaceId }: { workspaceId: string }) {
 function DeliveryLog({ deliveries, webhookId }: { workspaceId: string; webhookId: string; deliveries: WebhookDelivery[] }) {
   void webhookId;
   if (deliveries.length === 0) {
-    return <p className="text-xs text-gray-400 px-4 pb-3">No recent deliveries.</p>;
+    return <p className="text-xs text-muted-foreground px-4 pb-3">No recent deliveries.</p>;
   }
   return (
     <div className="border-t divide-y">
@@ -321,16 +321,16 @@ function DeliveryLog({ deliveries, webhookId }: { workspaceId: string; webhookId
           <span
             className={`w-16 text-center px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
               d.response_status && d.response_status < 300
-                ? 'bg-green-50 text-green-600'
+                ? 'bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400'
                 : d.failed_at
-                ? 'bg-red-50 text-red-500'
-                : 'bg-gray-100 text-gray-400'
+                ? 'bg-red-50 text-red-500 dark:bg-red-950/50 dark:text-red-400'
+                : 'bg-muted text-muted-foreground'
             }`}
           >
             {d.response_status ?? (d.failed_at ? 'failed' : 'pending')}
           </span>
-          <span className="font-mono text-gray-500 flex-1 truncate">{d.event}</span>
-          <span className="text-gray-400 flex-shrink-0">
+          <span className="font-mono text-muted-foreground flex-1 truncate">{d.event}</span>
+          <span className="text-muted-foreground flex-shrink-0">
             {new Date(d.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
           </span>
         </div>
@@ -370,16 +370,16 @@ function UserDigestSettings() {
     }
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+  if (loading) return <p className="text-muted-foreground text-sm">Loading…</p>;
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Email Digest</h2>
-        <p className="text-xs text-gray-500">Receive a daily summary of your tasks and activity.</p>
+        <h2 className="text-base font-semibold text-foreground mb-1">Email Digest</h2>
+        <p className="text-xs text-muted-foreground">Receive a daily summary of your tasks and activity.</p>
       </div>
 
-      <div className="bg-white border rounded-xl p-4 space-y-4">
+      <div className="bg-card border rounded-xl p-4 space-y-4">
         <label className="flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -388,19 +388,19 @@ function UserDigestSettings() {
             className="rounded w-4 h-4"
           />
           <div>
-            <p className="text-sm font-medium text-gray-800">Enable daily digest</p>
-            <p className="text-xs text-gray-400">Get a morning summary of due tasks, overdue items, and recent mentions.</p>
+            <p className="text-sm font-medium text-foreground">Enable daily digest</p>
+            <p className="text-xs text-muted-foreground">Get a morning summary of due tasks, overdue items, and recent mentions.</p>
           </div>
         </label>
 
         {prefs.digest_enabled && (
           <div>
-            <label className="text-xs text-gray-500 block mb-1.5">Send digest at (local hour)</label>
+            <label className="text-xs text-muted-foreground block mb-1.5">Send digest at (local hour)</label>
             <select
               title="Digest hour"
               value={prefs.digest_hour}
               onChange={(e) => setPrefs({ ...prefs, digest_hour: parseInt(e.target.value) })}
-              className="border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="border rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-background text-foreground"
             >
               {Array.from({ length: 24 }, (_, i) => (
                 <option key={i} value={i}>
@@ -420,7 +420,7 @@ function UserDigestSettings() {
           >
             {saving ? 'Saving…' : 'Save preferences'}
           </button>
-          {saved && <span className="text-xs text-green-600">Saved!</span>}
+          {saved && <span className="text-xs text-green-600 dark:text-green-400">Saved!</span>}
         </div>
       </div>
     </div>
@@ -439,10 +439,10 @@ interface WsMember {
 }
 
 const ROLE_BADGE: Record<WsRole, string> = {
-  owner:  'bg-purple-50 text-purple-700',
-  admin:  'bg-blue-50 text-blue-700',
-  member: 'bg-gray-100 text-gray-600',
-  guest:  'bg-amber-50 text-amber-700',
+  owner:  'bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
+  admin:  'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+  member: 'bg-muted text-muted-foreground',
+  guest:  'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
 };
 
 function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
@@ -493,18 +493,18 @@ function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
 
   const canManage = myRole === 'owner' || myRole === 'admin';
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+  if (loading) return <p className="text-muted-foreground text-sm">Loading…</p>;
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Workspace Members</h2>
-        <p className="text-xs text-gray-500">Guests can only view projects they are explicitly added to.</p>
+        <h2 className="text-base font-semibold text-foreground mb-1">Workspace Members</h2>
+        <p className="text-xs text-muted-foreground">Guests can only view projects they are explicitly added to.</p>
       </div>
 
       {canManage && (
-        <div className="bg-white border rounded-xl p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">Invite member</h3>
+        <div className="bg-card border rounded-xl p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">Invite member</h3>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
             <input
@@ -513,13 +513,13 @@ function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
               onChange={(e) => setInviteEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && invite()}
               placeholder="Email address"
-              className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-background text-foreground"
             />
             <select
               title="Role"
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member' | 'guest')}
-              className="border rounded-lg px-2 py-1.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
+              className="border rounded-lg px-2 py-1.5 text-sm bg-background text-foreground outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="admin">Admin</option>
               <option value="member">Member</option>
@@ -534,16 +534,16 @@ function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
               {inviting ? 'Inviting…' : 'Invite'}
             </button>
           </div>
-          <p className="text-xs text-gray-400">Guest — read-only access to projects they are added to. Member — full access. Admin — manage workspace.</p>
+          <p className="text-xs text-muted-foreground">Guest — read-only access to projects they are added to. Member — full access. Admin — manage workspace.</p>
         </div>
       )}
 
-      <div className="bg-white border rounded-xl divide-y overflow-hidden">
+      <div className="bg-card border rounded-xl divide-y overflow-hidden">
         {members.map((m) => (
           <div key={m.id} className="px-4 py-3 flex items-center gap-3">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800">{m.name}</p>
-              <p className="text-xs text-gray-400">{m.email}</p>
+              <p className="text-sm font-medium text-foreground">{m.name}</p>
+              <p className="text-xs text-muted-foreground">{m.email}</p>
             </div>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${ROLE_BADGE[m.role]}`}>
               {m.role}
@@ -603,7 +603,7 @@ function SecurityTab({ workspaceId }: { workspaceId: string }) {
     }
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+  if (loading) return <p className="text-muted-foreground text-sm">Loading…</p>;
 
   const canEditPolicy = userRole === 'owner' || userRole === 'admin';
 
@@ -612,26 +612,29 @@ function SecurityTab({ workspaceId }: { workspaceId: string }) {
       {canEditPolicy && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-base font-semibold text-gray-800 mb-1">Workspace Security Policy</h2>
-            <p className="text-xs text-gray-500">Enforce security requirements for all workspace members.</p>
+            <h2 className="text-base font-semibold text-foreground mb-1">Workspace Security Policy</h2>
+            <p className="text-xs text-muted-foreground">Enforce security requirements for all workspace members.</p>
           </div>
-          <div className="bg-white border rounded-xl p-4">
+          <div className="bg-card border rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <button
-                type="button"
-                aria-pressed={require2fa ? 'true' : 'false'}
-                aria-label={require2fa ? 'Disable 2FA requirement' : 'Enable 2FA requirement'}
-                onClick={() => !saving && toggleRequire2fa(!require2fa)}
-                disabled={saving}
-                className={`mt-0.5 w-9 h-5 rounded-full transition-colors flex-shrink-0 relative disabled:opacity-50 ${require2fa ? 'bg-blue-600' : 'bg-gray-200'}`}
+              <label
+                className={`mt-0.5 w-9 h-5 rounded-full transition-colors flex-shrink-0 relative ${saving ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${require2fa ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
               >
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={require2fa}
+                  onChange={() => { void toggleRequire2fa(!require2fa); }}
+                  disabled={saving}
+                  aria-label="Require two-factor authentication"
+                />
                 <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${require2fa ? 'translate-x-4' : 'translate-x-0.5'}`} />
-              </button>
+              </label>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-800">Require two-factor authentication</p>
-                <p className="text-xs text-gray-400 mt-0.5">Members without 2FA will be blocked from accessing workspace resources until they enable it.</p>
+                <p className="text-sm font-medium text-foreground">Require two-factor authentication</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Members without 2FA will be blocked from accessing workspace resources until they enable it.</p>
               </div>
-              {saved && <span className="text-xs text-green-600 self-center">Saved!</span>}
+              {saved && <span className="text-xs text-green-600 dark:text-green-400 self-center">Saved!</span>}
             </div>
           </div>
         </div>
@@ -714,23 +717,23 @@ function TwoFactorSettings() {
     setRecoveryCodes(data.recovery_codes);
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+  if (loading) return <p className="text-muted-foreground text-sm">Loading…</p>;
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Two-Factor Authentication</h2>
-        <p className="text-xs text-gray-500 mb-4">Add an extra layer of security using an authenticator app (Google Authenticator, Authy, etc).</p>
+        <h2 className="text-base font-semibold text-foreground mb-1">Two-Factor Authentication</h2>
+        <p className="text-xs text-muted-foreground mb-4">Add an extra layer of security using an authenticator app (Google Authenticator, Authy, etc).</p>
       </div>
 
-      {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+      {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950/50 px-3 py-2 rounded-lg">{error}</p>}
 
       {/* Status badge */}
-      <div className="bg-white border rounded-xl p-4 flex items-center gap-3">
-        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${status?.enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
+      <div className="bg-card border rounded-xl p-4 flex items-center gap-3">
+        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${status?.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-800">{status?.enabled ? '2FA is enabled' : '2FA is disabled'}</p>
-          <p className="text-xs text-gray-400">{status?.enabled ? 'Your account is protected with TOTP.' : 'Enable 2FA to secure your account.'}</p>
+          <p className="text-sm font-medium text-foreground">{status?.enabled ? '2FA is enabled' : '2FA is disabled'}</p>
+          <p className="text-xs text-muted-foreground">{status?.enabled ? 'Your account is protected with TOTP.' : 'Enable 2FA to secure your account.'}</p>
         </div>
         {!status?.enabled && step === 'idle' && (
           <button type="button" onClick={startEnable} disabled={saving} className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">
@@ -741,8 +744,8 @@ function TwoFactorSettings() {
 
       {/* Setup step: show QR code */}
       {step === 'setup' && (
-        <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700">Scan with your authenticator app</h3>
+        <div className="bg-card border border-blue-200 dark:border-blue-800 rounded-xl p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-foreground">Scan with your authenticator app</h3>
           <div className="flex flex-col items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -751,11 +754,11 @@ function TwoFactorSettings() {
               alt="2FA QR Code"
               className="w-44 h-44 rounded-lg border"
             />
-            <p className="text-xs text-gray-500">Or enter this key manually:</p>
-            <code className="text-xs bg-gray-100 px-3 py-1.5 rounded-lg font-mono tracking-widest text-gray-700 select-all">{manualEntry}</code>
+            <p className="text-xs text-muted-foreground">Or enter this key manually:</p>
+            <code className="text-xs bg-muted px-3 py-1.5 rounded-lg font-mono tracking-widest text-foreground select-all">{manualEntry}</code>
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Enter the 6-digit code from your app *</label>
+            <label className="text-xs text-muted-foreground block mb-1">Enter the 6-digit code from your app *</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -764,25 +767,25 @@ function TwoFactorSettings() {
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono tracking-widest"
+                className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono tracking-widest bg-background text-foreground"
               />
               <button type="button" onClick={confirmEnable} disabled={saving || code.length !== 6} className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {saving ? 'Verifying…' : 'Confirm'}
               </button>
             </div>
           </div>
-          <button type="button" onClick={() => { setStep('idle'); setCode(''); }} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+          <button type="button" onClick={() => { setStep('idle'); setCode(''); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
         </div>
       )}
 
       {/* Recovery codes after enabling */}
       {step === 'codes' && recoveryCodes.length > 0 && (
-        <div className="bg-white border border-green-200 rounded-xl p-5 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">Save your recovery codes</h3>
-          <p className="text-xs text-gray-500">Store these somewhere safe. Each code can only be used once if you lose access to your authenticator.</p>
+        <div className="bg-card border border-green-200 dark:border-green-800 rounded-xl p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">Save your recovery codes</h3>
+          <p className="text-xs text-muted-foreground">Store these somewhere safe. Each code can only be used once if you lose access to your authenticator.</p>
           <div className="grid grid-cols-2 gap-1.5">
             {recoveryCodes.map((c) => (
-              <code key={c} className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700">{c}</code>
+              <code key={c} className="text-xs bg-muted px-2 py-1 rounded font-mono text-foreground">{c}</code>
             ))}
           </div>
           <button type="button" onClick={() => setStep('idle')} className="text-sm bg-green-600 text-white px-4 py-1.5 rounded-lg hover:bg-green-700">Done</button>
@@ -792,24 +795,24 @@ function TwoFactorSettings() {
       {/* Actions when 2FA is already enabled */}
       {status?.enabled && step === 'idle' && (
         <div className="space-y-3">
-          <div className="bg-white border rounded-xl p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-700">Recovery Codes</h3>
+          <div className="bg-card border rounded-xl p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-foreground">Recovery Codes</h3>
             {recoveryCodes.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 gap-1.5">
                   {recoveryCodes.map((c) => (
-                    <code key={c} className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700">{c}</code>
+                    <code key={c} className="text-xs bg-muted px-2 py-1 rounded font-mono text-foreground">{c}</code>
                   ))}
                 </div>
-                <button type="button" onClick={regenerateCodes} className="text-xs text-orange-500 hover:text-orange-700">Regenerate codes</button>
+                <button type="button" onClick={regenerateCodes} className="text-xs text-orange-500 hover:text-orange-700 dark:hover:text-orange-300">Regenerate codes</button>
               </>
             ) : (
-              <button type="button" onClick={loadRecoveryCodes} className="text-sm text-blue-600 hover:text-blue-800">Show recovery codes</button>
+              <button type="button" onClick={loadRecoveryCodes} className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">Show recovery codes</button>
             )}
           </div>
 
-          <div className="bg-white border rounded-xl p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-700">Disable 2FA</h3>
+          <div className="bg-card border rounded-xl p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-foreground">Disable 2FA</h3>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -818,7 +821,7 @@ function TwoFactorSettings() {
                 value={disableCode}
                 onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="Enter 6-digit TOTP code"
-                className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400 font-mono tracking-widest"
+                className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-400 font-mono tracking-widest bg-background text-foreground"
               />
               <button type="button" onClick={disable} disabled={saving || disableCode.length !== 6} className="text-sm bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 disabled:opacity-50">
                 {saving ? 'Disabling…' : 'Disable'}
@@ -876,24 +879,24 @@ function GitHubSettings({ workspaceId }: { workspaceId: string }) {
     });
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+  if (loading) return <p className="text-muted-foreground text-sm">Loading…</p>;
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">GitHub Integration</h2>
-        <p className="text-xs text-gray-500">Connect a GitHub Personal Access Token to link repositories, issues, and pull requests.</p>
+        <h2 className="text-base font-semibold text-foreground mb-1">GitHub Integration</h2>
+        <p className="text-xs text-muted-foreground">Connect a GitHub Personal Access Token to link repositories, issues, and pull requests.</p>
       </div>
 
       {/* Connection status */}
-      <div className="bg-white border rounded-xl p-5 space-y-4">
+      <div className="bg-card border rounded-xl p-5 space-y-4">
         <div className="flex items-center gap-3">
-          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${conn?.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
+          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${conn?.connected ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
           <div className="flex-1">
-            <p className="text-sm font-medium text-gray-800">
+            <p className="text-sm font-medium text-foreground">
               {conn?.connected ? `Connected as @${conn.github_username}` : 'Not connected'}
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               {conn?.connected ? 'GitHub API access is active for this workspace.' : 'Enter a Personal Access Token with repo scope.'}
             </p>
           </div>
@@ -901,7 +904,7 @@ function GitHubSettings({ workspaceId }: { workspaceId: string }) {
             <button
               type="button"
               onClick={disconnect}
-              className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded px-2 py-1"
+              className="text-xs text-red-400 hover:text-red-600 border border-red-200 dark:border-red-800 rounded px-2 py-1"
             >
               Disconnect
             </button>
@@ -918,18 +921,18 @@ function GitHubSettings({ workspaceId }: { workspaceId: string }) {
                 onChange={(e) => setToken(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && connect()}
                 placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono bg-background text-foreground"
               />
               <button
                 type="button"
                 onClick={connect}
                 disabled={connecting || !token.trim()}
-                className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-lg hover:bg-black disabled:opacity-50"
+                className="text-sm bg-gray-900 dark:bg-gray-700 text-white px-4 py-1.5 rounded-lg hover:bg-black dark:hover:bg-gray-600 disabled:opacity-50"
               >
                 {connecting ? 'Connecting…' : 'Connect'}
               </button>
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               Create a token at <span className="font-mono">github.com/settings/tokens</span> with <span className="font-mono">repo</span> scope.
             </p>
           </div>
@@ -938,30 +941,30 @@ function GitHubSettings({ workspaceId }: { workspaceId: string }) {
 
       {/* Webhook setup */}
       {conn?.connected && conn.webhook_url && (
-        <div className="bg-white border rounded-xl p-5 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">Webhook Setup</h3>
-          <p className="text-xs text-gray-500">
+        <div className="bg-card border rounded-xl p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">Webhook Setup</h3>
+          <p className="text-xs text-muted-foreground">
             Add this webhook to your GitHub repositories to auto-update tasks when issues or PRs change.
           </p>
           <div className="space-y-2">
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Payload URL</label>
+              <label className="text-xs text-muted-foreground block mb-1">Payload URL</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs bg-gray-100 px-3 py-2 rounded-lg font-mono text-gray-700 truncate">{conn.webhook_url}</code>
+                <code className="flex-1 text-xs bg-muted px-3 py-2 rounded-lg font-mono text-foreground truncate">{conn.webhook_url}</code>
                 <button
                   type="button"
                   onClick={() => copySecret(conn.webhook_url!)}
-                  className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0 border rounded px-2 py-1"
+                  className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0 border rounded px-2 py-1"
                 >
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
               </div>
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Secret</label>
-              <code className="block text-xs bg-gray-100 px-3 py-2 rounded-lg font-mono text-gray-700">{conn.webhook_secret}</code>
+              <label className="text-xs text-muted-foreground block mb-1">Secret</label>
+              <code className="block text-xs bg-muted px-3 py-2 rounded-lg font-mono text-foreground">{conn.webhook_secret}</code>
             </div>
-            <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700 space-y-1">
+            <div className="bg-blue-50 dark:bg-blue-950/50 rounded-lg p-3 text-xs text-blue-700 dark:text-blue-300 space-y-1">
               <p className="font-medium">GitHub webhook events to subscribe:</p>
               <p><span className="font-mono">Issues</span> — closes linked tasks when an issue is closed</p>
               <p><span className="font-mono">Pull requests</span> — updates PR state on linked tasks</p>

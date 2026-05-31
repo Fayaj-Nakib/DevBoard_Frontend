@@ -28,18 +28,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
-    if (savedToken) {
-      api.get('/auth/me')
-        .then((r) => {
-          setToken(savedToken);
-          setUser(r.data);
-        })
-        .catch(() => localStorage.removeItem('token'))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+    async function init() {
+      const savedToken = localStorage.getItem('token');
+      if (!savedToken) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const r = await api.get('/auth/me');
+        setToken(savedToken);
+        setUser(r.data);
+      } catch {
+        localStorage.removeItem('token');
+      } finally {
+        setLoading(false);
+      }
     }
+    init();
   }, []);
 
   const login = async (email: string, password: string) => {
