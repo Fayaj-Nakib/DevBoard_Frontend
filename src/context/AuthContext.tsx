@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface User {
   id: string;
@@ -61,10 +62,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await api.post('/auth/logout');
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Server-side logout failed — still clear local auth state
+    }
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
+    toast.success("You've been signed out");
     router.push('/login');
   };
 
