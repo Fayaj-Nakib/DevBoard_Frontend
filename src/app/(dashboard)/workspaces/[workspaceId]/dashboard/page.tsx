@@ -361,6 +361,15 @@ export default function DashboardPage() {
   const [loadingTasks, setLoadingTasks] = useState(() => !!user?.id);
   const [sortBy, setSortBy] = useState<'updated' | 'name' | 'tasks'>('updated');
 
+  // Initialise as empty so server and client render identical HTML on first pass.
+  // useEffect sets the real values after hydration, avoiding React error #418.
+  const [greetingText, setGreetingText] = useState('');
+  const [todayLabel, setTodayLabel] = useState('');
+  useEffect(() => {
+    setGreetingText(greeting());
+    setTodayLabel(format(new Date(), 'EEEE, MMMM d'));
+  }, []);
+
   /* ── Fetch ──────────────────────────────────────────────────────────────── */
   // Extract to a primitive so the effect dep array doesn't hold the whole user object
   const userId = user?.id;
@@ -453,10 +462,10 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {greeting()}, {user?.name?.split(' ')[0] ?? ''}
+            {greetingText && `${greetingText}, `}{user?.name?.split(' ')[0] ?? ''}
           </h1>
           <p className="text-sm text-foreground-tertiary mt-1">
-            {format(new Date(), 'EEEE, MMMM d')}
+            {todayLabel}
           </p>
         </div>
         <div className="flex gap-2 flex-shrink-0">
