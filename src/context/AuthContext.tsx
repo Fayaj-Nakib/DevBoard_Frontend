@@ -24,7 +24,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(() => typeof window !== 'undefined' && !!localStorage.getItem('token'));
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
@@ -37,6 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         .catch(() => localStorage.removeItem('token'))
         .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
   }, []);
 
