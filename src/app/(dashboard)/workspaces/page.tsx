@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FolderKanban, Loader2 } from 'lucide-react';
+import { Plus, Loader2, FolderOpen, Users, Clock, ArrowRight, LayoutGrid } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import { formatRelativeTime } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeToggle } from '@/components/theme-toggle';
 import NotificationsBell from '@/components/NotificationsBell';
@@ -24,6 +24,18 @@ interface Workspace {
   id: string;
   name: string;
   slug: string;
+  color?: string;
+  projects_count?: number;
+  members_count?: number;
+  updated_at?: string;
+}
+
+function generateColorFromName(name: string): string {
+  const colors = [
+    '#7C3AED', '#2563EB', '#059669', '#D97706',
+    '#DC2626', '#DB2777', '#0891B2', '#65A30D',
+  ];
+  return colors[name.charCodeAt(0) % colors.length];
 }
 
 export default function WorkspacesPage() {
@@ -141,39 +153,61 @@ export default function WorkspacesPage() {
           )}
         </form>
 
-        {/* Workspace grid */}
+        {/* Workspace list */}
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-24 rounded-xl" />
+          <div className="space-y-3">
+            {[1, 2].map((i) => (
+              <Skeleton key={i} className="h-[76px] rounded-xl" />
             ))}
           </div>
         ) : workspaces.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-12 h-12 rounded-xl bg-primary-subtle flex items-center justify-center mb-3">
-              <FolderKanban className="w-6 h-6 text-primary" />
+          <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border rounded-xl">
+            <div className="w-14 h-14 rounded-2xl bg-primary-subtle flex items-center justify-center mb-4">
+              <LayoutGrid className="w-7 h-7 text-primary" />
             </div>
-            <p className="text-sm font-medium text-foreground-secondary mb-1">No workspaces yet</p>
-            <p className="text-xs text-foreground-tertiary">Create your first workspace above.</p>
+            <p className="text-base font-semibold mb-1">No workspaces yet</p>
+            <p className="text-sm text-foreground-tertiary max-w-xs">
+              A workspace is your team&apos;s home in DevBoard. Create one to get started.
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
             {workspaces.map((ws) => (
-              <Card
+              <div
                 key={ws.id}
                 onClick={() => router.push(`/workspaces/${ws.id}/dashboard`)}
-                className="p-5 hover:border-border-strong hover:shadow-sm hover:-translate-y-[1px] transition-all duration-150 cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:border-border-strong hover:shadow-md hover:-translate-y-[1px] cursor-pointer transition-all duration-150 mb-3"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-primary-subtle flex items-center justify-center flex-shrink-0">
-                    <FolderKanban className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-medium text-foreground truncate">{ws.name}</h3>
-                    <p className="text-xs text-foreground-tertiary mt-0.5 font-mono truncate">{ws.slug}</p>
+                {/* Workspace avatar */}
+                <svg width="44" height="44" viewBox="0 0 44 44" className="flex-shrink-0 rounded-xl overflow-hidden">
+                  <rect width="44" height="44" fill={ws.color ?? generateColorFromName(ws.name)} />
+                  <text x="22" y="30" textAnchor="middle" fill="white" fontSize="18" fontWeight="bold" fontFamily="inherit">
+                    {ws.name.charAt(0).toUpperCase()}
+                  </text>
+                </svg>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold leading-tight">{ws.name}</p>
+                  <p className="text-xs text-foreground-tertiary mt-0.5">{ws.slug}</p>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-foreground-tertiary">
+                    <span className="flex items-center gap-1">
+                      <FolderOpen className="w-3 h-3" />{ws.projects_count ?? 0} projects
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />{ws.members_count ?? 1} members
+                    </span>
+                    {ws.updated_at && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />Active {formatRelativeTime(ws.updated_at)}
+                      </span>
+                    )}
                   </div>
                 </div>
-              </Card>
+
+                {/* Arrow on hover */}
+                <ArrowRight className="w-4 h-4 text-foreground-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-150 flex-shrink-0" />
+              </div>
             ))}
           </div>
         )}
