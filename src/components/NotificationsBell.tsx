@@ -123,6 +123,8 @@ export default function NotificationsBell() {
     const token = localStorage.getItem('token');
     if (!token) return;
     const echo = getEcho(token);
+    if (!echo) return; // WebSocket not configured
+
     const channel = echo.private(`private-user.${user.id}`);
     channel.listen('.notification.created', (data: { notification: Notification }) => {
       setNotifications((prev) => [data.notification, ...prev]);

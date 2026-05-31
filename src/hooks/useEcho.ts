@@ -15,6 +15,8 @@ export function useEcho() {
     if (!token) return;
 
     const instance = getEcho(token);
+    if (!instance) return; // WebSocket not configured
+
     setEcho(instance); // eslint-disable-line react-hooks/set-state-in-effect
 
     instance.connector.pusher.connection.bind('connected', () => setConnected(true));

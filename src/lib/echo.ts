@@ -10,42 +10,28 @@ declare global {
 
 let echoInstance: Echo<'reverb'> | null = null;
 
-export function getEcho(authToken: string): Echo<'reverb'> {
+export function getEcho(authToken: string): Echo<'reverb'> | null {
   if (echoInstance) return echoInstance;
+
+  if (!process.env.NEXT_PUBLIC_REVERB_HOST) {
+    console.warn('WebSocket not configured — real-time features disabled');
+    return null;
+  }
 
   window.Pusher = Pusher;
 
-  const rawApiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api';
-
-  // Derive WebSocket host and scheme from the API URL so production works
-  // automatically once NEXT_PUBLIC_API_URL is set to the Render backend URL.
-  // Override with NEXT_PUBLIC_REVERB_* only if Reverb runs on a separate host.
-  let derivedHost = 'localhost';
-  let derivedScheme = 'http';
-  try {
-    const parsed = new URL(rawApiUrl);
-    derivedHost = parsed.hostname;
-    derivedScheme = parsed.protocol.replace(':', '');
-  } catch {
-    // keep localhost defaults if the URL is somehow unparseable
-  }
-
-  const reverbScheme = process.env.NEXT_PUBLIC_REVERB_SCHEME ?? derivedScheme;
-  const reverbHost   = process.env.NEXT_PUBLIC_REVERB_HOST   ?? derivedHost;
-  const defaultPort  = reverbScheme === 'https' ? 443 : 8080;
-  const reverbPort   = Number(process.env.NEXT_PUBLIC_REVERB_PORT ?? defaultPort);
-
-  // Strip a trailing /api segment so the auth endpoint isn't doubled
+  // Strip trailing /api so the auth endpoint isn't doubled
   // (NEXT_PUBLIC_API_URL already includes /api, e.g. https://host/api)
+  const rawApiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api';
   const apiBaseUrl = rawApiUrl.replace(/\/api\/?$/, '');
 
   echoInstance = new Echo({
     broadcaster: 'reverb',
-    key:      process.env.NEXT_PUBLIC_REVERB_APP_KEY ?? 'devboard-key',
-    wsHost:   reverbHost,
-    wsPort:   reverbPort,
-    wssPort:  reverbPort,
-    forceTLS: reverbScheme === 'https',
+    key:      process.env.NEXT_PUBLIC_REVERB_APP_KEY,
+    wsHost:   process.env.NEXT_PUBLIC_REVERB_HOST,
+    wsPort:   Number(process.env.NEXT_PUBLIC_REVERB_PORT ?? 443),
+    wssPort:  Number(process.env.NEXT_PUBLIC_REVERB_PORT ?? 443),
+    forceTLS: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https',
     enabledTransports: ['ws', 'wss'],
     authEndpoint: `${apiBaseUrl}/api/broadcasting/auth`,
     auth: {
