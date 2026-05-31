@@ -2,15 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Loader2, FolderOpen, Users, Clock, ArrowRight, LayoutGrid, AlertCircle } from 'lucide-react';
+import {
+  Plus, Loader2, FolderOpen, Users, Clock, ArrowRight, LayoutGrid, AlertCircle,
+} from 'lucide-react';
+import { format } from 'date-fns';
 
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
-import { formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime, initials } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
 import { ThemeToggle } from '@/components/theme-toggle';
 import NotificationsBell from '@/components/NotificationsBell';
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -18,7 +24,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, LogOut } from 'lucide-react';
+import { ChevronDown, LogOut, Settings } from 'lucide-react';
 
 interface Workspace {
   id: string;
@@ -53,6 +59,11 @@ export default function WorkspacesPage() {
       .catch(() => setWorkspaces([]))
       .finally(() => setLoading(false));
   }, []);
+
+  // Alias — same function fixed in Step 1, no second implementation
+  const handleSignOut = logout;
+  // created_at is returned by the API but not declared in the AuthContext User type
+  const createdAt = user ? (user as { created_at?: string }).created_at : undefined;
 
   const handleCreate = () => {
     if (!name.trim()) {
@@ -232,7 +243,71 @@ export default function WorkspacesPage() {
 
             {/* RIGHT — col-span-1 */}
             <div className="lg:col-span-1">
-              {/* user panel — next step */}
+
+              {/* User card */}
+              {user && (
+                <Card className="p-5 mb-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Avatar className="w-11 h-11">
+                      <AvatarFallback className="text-sm bg-primary text-primary-foreground font-semibold">
+                        {initials(user.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{user.name}</p>
+                      <p className="text-xs text-foreground-tertiary truncate">{user.email}</p>
+                    </div>
+                  </div>
+
+                  <Separator className="mb-4" />
+
+                  <div className="space-y-1">
+                    <Button variant="ghost" size="sm" className="w-full justify-start h-8 text-xs">
+                      <Settings className="w-3.5 h-3.5 mr-2 text-foreground-tertiary" />
+                      Account settings
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start h-8 text-xs text-destructive hover:bg-destructive-subtle hover:text-destructive"
+                      onClick={handleSignOut}
+                    >
+                      <LogOut className="w-3.5 h-3.5 mr-2" />
+                      Sign out
+                    </Button>
+                  </div>
+                </Card>
+              )}
+
+              {/* Overview stats card */}
+              {workspaces.length > 0 && user && (
+                <Card className="p-5">
+                  <p className="text-xs font-medium uppercase tracking-wider text-foreground-tertiary mb-4">
+                    Overview
+                  </p>
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground-secondary">Workspaces</span>
+                      <span className="font-medium">{workspaces.length}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground-secondary">Total projects</span>
+                      <span className="font-medium">
+                        {workspaces.reduce((a, ws) => a + (ws.projects_count ?? 0), 0)}
+                      </span>
+                    </div>
+                    {createdAt && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-foreground-secondary">Member since</span>
+                        <span className="font-medium text-foreground-secondary">
+                          {format(new Date(createdAt), 'MMM yyyy')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+
             </div>
 
           </div>{/* end grid */}
