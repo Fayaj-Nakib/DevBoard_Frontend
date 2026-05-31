@@ -33,6 +33,7 @@ export default function WorkspacesPage() {
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     api.get('/workspaces')
@@ -41,13 +42,24 @@ export default function WorkspacesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const createWorkspace = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!newName.trim()) return;
+  const createWorkspace = () => {
+    if (!newName.trim()) {
+      setCreateError('Workspace name cannot be empty.');
+      return;
+    }
+    setCreateError('');
     setCreating(true);
-    api.post('/workspaces', { name: newName.trim() })
-      .then((r) => { setWorkspaces((prev) => [...prev, r.data]); setNewName(''); })
-      .catch(() => {})
+    api.post<Workspace>('/workspaces', { name: newName.trim() })
+      .then((r) => {
+        const ws = r.data;
+        setWorkspaces((prev) => [...prev, ws]);
+        setNewName('');
+        router.push(`/workspaces/${ws.id}/dashboard`);
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.message ?? 'Failed to create workspace. Please try again.';
+        setCreateError(msg);
+      })
       .finally(() => setCreating(false));
   };
 
@@ -106,21 +118,27 @@ export default function WorkspacesPage() {
         </div>
 
         {/* Create form */}
-        <form onSubmit={createWorkspace} className="flex gap-3 mb-8">
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="New workspace name…"
-            className="flex-1"
-          />
-          <Button type="submit" disabled={creating || !newName.trim()}>
-            {creating ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Plus className="w-4 h-4 mr-1.5" />
-            )}
-            Create
-          </Button>
+        <form onSubmit={(e) => { e.preventDefault(); createWorkspace(); }} className="flex flex-col gap-2 mb-8">
+          <div className="flex gap-3">
+            <Input
+              value={newName}
+              onChange={(e) => { setNewName(e.target.value); if (createError) setCreateError(''); }}
+              placeholder="New workspace name…"
+              className="flex-1"
+              aria-invalid={!!createError}
+            />
+            <Button type="submit" disabled={creating}>
+              {creating ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4 mr-1.5" />
+              )}
+              Create
+            </Button>
+          </div>
+          {createError && (
+            <p className="text-sm text-destructive">{createError}</p>
+          )}
         </form>
 
         {/* Workspace grid */}
@@ -143,7 +161,7 @@ export default function WorkspacesPage() {
             {workspaces.map((ws) => (
               <Card
                 key={ws.id}
-                onClick={() => router.push(`/workspaces/${ws.id}/projects`)}
+                onClick={() => router.push(`/workspaces/${ws.id}/dashboard`)}
                 className="p-5 hover:border-border-strong hover:shadow-sm hover:-translate-y-[1px] transition-all duration-150 cursor-pointer"
               >
                 <div className="flex items-center gap-3">
