@@ -41,11 +41,11 @@ export default function CreateTaskModal({ workspaceId, projectId, defaultDueDate
 
   useEffect(() => {
     Promise.all([
-      api.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`),
-      api.get<Label[]>(`/workspaces/${workspaceId}/labels`),
-      api.get<Milestone[]>(`/workspaces/${workspaceId}/projects/${projectId}/milestones`),
-      api.get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`),
-      api.get<TaskTemplate[]>(`/workspaces/${workspaceId}/projects/${projectId}/templates`),
+      api.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`).catch(() => ({ data: [] as WorkspaceMember[] })),
+      api.get<Label[]>(`/workspaces/${workspaceId}/labels`).catch(() => ({ data: [] as Label[] })),
+      api.get<Milestone[]>(`/workspaces/${workspaceId}/projects/${projectId}/milestones`).catch(() => ({ data: [] as Milestone[] })),
+      api.get<Sprint[]>(`/workspaces/${workspaceId}/projects/${projectId}/sprints`).catch(() => ({ data: [] as Sprint[] })),
+      api.get<TaskTemplate[]>(`/workspaces/${workspaceId}/projects/${projectId}/templates`).catch(() => ({ data: [] as TaskTemplate[] })),
     ]).then(([m, l, ms, sp, tpl]) => {
       setMembers(m.data);
       setAllLabels(l.data);

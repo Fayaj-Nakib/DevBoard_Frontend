@@ -381,8 +381,11 @@ export default function DashboardPage() {
         .finally(() => setLoadingTasks(false));
     }
 
-    api.get<ActivityItem[]>(`/workspaces/${workspaceId}/activity`, { params: { limit: 8 } })
-      .then((r) => setActivity(Array.isArray(r.data) ? r.data : []))
+    api.get(`/workspaces/${workspaceId}/activity`, { params: { limit: 8 } })
+      .then((r) => {
+        const items = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
+        setActivity(Array.isArray(items) ? items : []);
+      })
       .catch(() => setActivity([]));
   }, [workspaceId, userId]);
 

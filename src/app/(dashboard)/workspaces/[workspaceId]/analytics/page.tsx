@@ -47,7 +47,13 @@ export default function WorkspaceAnalyticsPage() {
   useEffect(() => {
     api.get<ProjectStats>(`/workspaces/${workspaceId}/stats`)
       .then((r) => { setStats(r.data); setError(false); })
-      .catch(() => setError(true))
+      .catch((err) => {
+        if (err?.response?.status === 404) {
+          setStats(null);
+        } else {
+          setError(true);
+        }
+      })
       .finally(() => setLoading(false));
   }, [workspaceId, refreshKey]);
 
@@ -87,7 +93,14 @@ export default function WorkspaceAnalyticsPage() {
     );
   }
 
-  if (!stats) return null;
+  if (!stats) {
+    return (
+      <div className="max-w-5xl mx-auto px-6 py-6">
+        <h1 className="text-xl font-semibold">Analytics</h1>
+        <p className="text-sm text-foreground-tertiary mt-4">No analytics data available yet.</p>
+      </div>
+    );
+  }
 
   const statCards = [
     { label: 'Open tasks',      value: stats.open_tasks,      color: 'text-primary' },

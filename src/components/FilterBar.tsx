@@ -71,7 +71,9 @@ export default function FilterBar({ workspaceId, projectId, filters, onChange }:
   const [milestones, setMilestones] = useState<Milestone[]>([]);
 
   useEffect(() => {
-    api.get<Label[]>(`/workspaces/${workspaceId}/labels`).then((r) => setLabels(r.data));
+    api.get<Label[]>(`/workspaces/${workspaceId}/labels`)
+      .then((r) => setLabels(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setLabels([]));
     api.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`).then((r) => setMembers(r.data));
     api.get<Milestone[]>(`/workspaces/${workspaceId}/projects/${projectId}/milestones`).then((r) => setMilestones(r.data));
   }, [workspaceId, projectId]);
