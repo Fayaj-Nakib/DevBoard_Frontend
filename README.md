@@ -129,7 +129,13 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `NEXT_PUBLIC_API_URL` | `http://127.0.0.1:8000/api` | Full URL of the Laravel API |
+| `NEXT_PUBLIC_API_URL` | `http://127.0.0.1:8000/api` | Full URL of the Laravel API (including `/api`) |
+| `NEXT_PUBLIC_REVERB_APP_KEY` | `gwcvazc9cdiddfruhi7q` | Must match `REVERB_APP_KEY` in the backend `.env` |
+| `NEXT_PUBLIC_REVERB_HOST` | _(auto-derived)_ | WebSocket host — defaults to the hostname in `NEXT_PUBLIC_API_URL` |
+| `NEXT_PUBLIC_REVERB_PORT` | _(auto-derived)_ | WebSocket port — defaults to `8080` for http, `443` for https |
+| `NEXT_PUBLIC_REVERB_SCHEME` | _(auto-derived)_ | `http` or `https` — defaults to the scheme in `NEXT_PUBLIC_API_URL` |
+
+`NEXT_PUBLIC_REVERB_HOST/PORT/SCHEME` are automatically derived from `NEXT_PUBLIC_API_URL`, so in most deployments only `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_REVERB_APP_KEY` need to be set.
 
 In production (Vercel), set `NEXT_PUBLIC_API_URL` to your Render service URL, e.g. `https://devboard-api.onrender.com/api`.
 
@@ -146,7 +152,8 @@ vercel
 ```
 
 Or connect the GitHub repo to Vercel and set:
-- `NEXT_PUBLIC_API_URL` → your Render API URL
+- `NEXT_PUBLIC_API_URL` → your Render API URL (e.g. `https://devboard-api.onrender.com/api`)
+- `NEXT_PUBLIC_REVERB_APP_KEY` → the value of `REVERB_APP_KEY` on your Render backend
 
 Vercel will run `npm run build` automatically on every push to `main`.
 
