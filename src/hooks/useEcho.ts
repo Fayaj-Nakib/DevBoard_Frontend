@@ -1,33 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
-import type Echo from 'laravel-echo';
-import { getEcho, destroyEcho } from '@/lib/echo';
+import { useEffect, useState } from 'react';
+import echo from '@/lib/echo';
 
 export function useEcho() {
-  const [echo, setEcho] = useState<Echo<'reverb'> | null>(null);
   const [connected, setConnected] = useState(false);
-  const initialized = useRef(false);
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
+    if (!echo) return; // WebSocket not configured
 
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    const conn = echo.connector.pusher.connection;
+    const onConnected    = () => setConnected(true);
+    const onDisconnected = () => setConnected(false);
+    const onUnavailable  = () => setConnected(false);
 
-    const instance = getEcho(token);
-    if (!instance) return; // WebSocket not configured
-
-    setEcho(instance); // eslint-disable-line react-hooks/set-state-in-effect
-
-    instance.connector.pusher.connection.bind('connected', () => setConnected(true));
-    instance.connector.pusher.connection.bind('disconnected', () => setConnected(false));
-    instance.connector.pusher.connection.bind('unavailable', () => setConnected(false));
+    conn.bind('connected', onConnected);
+    conn.bind('disconnected', onDisconnected);
+    conn.bind('unavailable', onUnavailable);
 
     return () => {
-      destroyEcho();
-      setEcho(null);
-      setConnected(false);
-      initialized.current = false;
+      conn.unbind('connected', onConnected);
+      conn.unbind('disconnected', onDisconnected);
+      conn.unbind('unavailable', onUnavailable);
     };
   }, []);
 

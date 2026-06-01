@@ -24,11 +24,11 @@ export function useTasks(
   workspaceId: string,
   projectId: string,
   filters: TaskFilters = {},
-  echo?: Echo<'reverb'> | null,
+  echo?: Echo<'pusher'> | null,
 ) {
   const [tasks, setTasks] = useState<Record<string, Task[]>>({});
   const [loading, setLoading] = useState(true);
-  const channelRef = useRef<ReturnType<Echo<'reverb'>['private']> | null>(null);
+  const channelRef = useRef<ReturnType<Echo<'pusher'>['private']> | null>(null);
 
   const queryStr = useMemo(
     () => buildQueryString(filters),
@@ -65,7 +65,7 @@ export function useTasks(
     fetchTasks();
   }, [fetchTasks]);
 
-  // Subscribe to real-time project events via Reverb
+  // Subscribe to real-time project events via Pusher
   useEffect(() => {
     if (!echo) return;
 

@@ -2,50 +2,43 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
 declare global {
-  interface Window {
-    Pusher: typeof Pusher;
-    Echo: Echo<'reverb'>;
-  }
+  interface Window { Pusher: typeof Pusher }
 }
 
-let echoInstance: Echo<'reverb'> | null = null;
+if (typeof window !== 'undefined') {
+  window.Pusher = Pusher;
+}
 
-export function getEcho(authToken: string): Echo<'reverb'> | null {
-  if (echoInstance) return echoInstance;
+const createEcho = () => {
+  const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
+  const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER ?? 'ap2';
 
-  if (!process.env.NEXT_PUBLIC_REVERB_HOST) {
-    console.warn('WebSocket not configured — real-time features disabled');
+  if (!key) {
+    console.warn('Pusher key not set — real-time features disabled');
     return null;
   }
 
-  window.Pusher = Pusher;
-
-  // Strip trailing /api so the auth endpoint isn't doubled
-  // (NEXT_PUBLIC_API_URL already includes /api, e.g. https://host/api)
   const rawApiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api';
-  const apiBaseUrl = rawApiUrl.replace(/\/api\/?$/, '');
+  const authBase = rawApiUrl.replace(/\/api\/?$/, '');
 
-  echoInstance = new Echo({
-    broadcaster: 'reverb',
-    key:      process.env.NEXT_PUBLIC_REVERB_APP_KEY,
-    wsHost:   process.env.NEXT_PUBLIC_REVERB_HOST,
-    wsPort:   Number(process.env.NEXT_PUBLIC_REVERB_PORT ?? 443),
-    wssPort:  Number(process.env.NEXT_PUBLIC_REVERB_PORT ?? 443),
-    forceTLS: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https',
-    enabledTransports: ['ws', 'wss'],
-    authEndpoint: `${apiBaseUrl}/api/broadcasting/auth`,
+  return new Echo({
+    broadcaster: 'pusher',
+    key,
+    cluster,
+    forceTLS: true,
+    authEndpoint: `${authBase}/api/broadcasting/auth`,
     auth: {
       headers: {
-        Authorization: `Bearer ${authToken}`,
+        // Getter so the token is read fresh on each auth request, not at module init
+        get Authorization() {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+          return `Bearer ${token ?? ''}`;
+        },
         Accept: 'application/json',
       },
     },
   });
+};
 
-  return echoInstance;
-}
-
-export function destroyEcho(): void {
-  echoInstance?.disconnect();
-  echoInstance = null;
-}
+const echo = typeof window !== 'undefined' ? createEcho() : null;
+export default echo;

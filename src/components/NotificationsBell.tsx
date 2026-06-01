@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { cn, initials } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { getEcho } from '@/lib/echo';
+import echo from '@/lib/echo';
 import type { Notification } from '@/types';
 
 import { Button } from '@/components/ui/button';
@@ -117,12 +117,9 @@ export default function NotificationsBell() {
       .catch(() => {});
   }, [refreshKey]);
 
-  // Real-time via Reverb
+  // Real-time via Pusher
   useEffect(() => {
     if (!user?.id) return;
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    const echo = getEcho(token);
     if (!echo) return; // WebSocket not configured
 
     const channel = echo.private(`private-user.${user.id}`);
