@@ -225,7 +225,7 @@ export default function WorkspacesPage() {
                             <Users className="w-3 h-3" />{ws.members_count ?? 1} members
                           </span>
                           {ws.updated_at && (
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1" suppressHydrationWarning>
                               <Clock className="w-3 h-3" />Active {formatRelativeTime(ws.updated_at)}
                             </span>
                           )}

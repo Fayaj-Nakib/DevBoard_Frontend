@@ -1130,7 +1130,7 @@ export default function TaskDetailModal({
                           <span className="text-sm font-medium text-foreground">
                             {c.user.name}
                           </span>
-                          <span className="text-xs text-foreground-tertiary">
+                          <span className="text-xs text-foreground-tertiary" suppressHydrationWarning>
                             {formatRelativeTime(c.created_at)}
                           </span>
                         </div>
@@ -1195,7 +1195,7 @@ export default function TaskDetailModal({
                             </span>
                           </span>
                         )}
-                        <p className="text-xs text-foreground-tertiary mt-0.5">
+                        <p className="text-xs text-foreground-tertiary mt-0.5" suppressHydrationWarning>
                           {formatRelativeTime(log.created_at)}
                         </p>
                       </div>

@@ -87,7 +87,7 @@ function NotifList({ items, onNotifClick }: NotifListProps) {
               <span className="font-medium">{getActorName(n)}</span>{' '}
               {getMessage(n)}
             </p>
-            <p className="text-[10px] text-foreground-tertiary mt-1">
+            <p className="text-[10px] text-foreground-tertiary mt-1" suppressHydrationWarning>
               {formatRelativeTime(n.created_at)}
             </p>
           </div>
@@ -120,14 +120,15 @@ export default function NotificationsBell() {
   // Real-time via Pusher
   useEffect(() => {
     if (!user?.id) return;
-    if (!echo) return; // WebSocket not configured
+    const echoClient = echo;
+    if (!echoClient) return; // WebSocket not configured
 
-    const channel = echo.private(`private-user.${user.id}`);
+    const channel = echoClient.private(`private-user.${user.id}`);
     channel.listen('.notification.created', (data: { notification: Notification }) => {
       setNotifications((prev) => [data.notification, ...prev]);
       setUnreadCount((c) => c + 1);
     });
-    return () => { echo.leave(`private-user.${user.id}`); };
+    return () => { echoClient.leave(`private-user.${user.id}`); };
   }, [user?.id]);
 
   const markRead = (id: string) => {

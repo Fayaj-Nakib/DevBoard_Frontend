@@ -325,7 +325,7 @@ function ProjectCard({ project, workspaceId }: { project: DashProject; workspace
             <span className="text-xs text-foreground-muted">No members</span>
           )}
           {project.updated_at && (
-            <span className="text-xs text-foreground-tertiary">
+            <span className="text-xs text-foreground-tertiary" suppressHydrationWarning>
               Updated {formatRelativeTime(project.updated_at)}
             </span>
           )}
@@ -590,7 +590,7 @@ export default function DashboardPage() {
                           {' '}{item.action}{' '}
                           <span className="font-medium">{item.subject}</span>
                         </p>
-                        <p className="text-xs text-foreground-tertiary mt-0.5">
+                        <p className="text-xs text-foreground-tertiary mt-0.5" suppressHydrationWarning>
                           {formatRelativeTime(item.created_at)}
                         </p>
                       </div>

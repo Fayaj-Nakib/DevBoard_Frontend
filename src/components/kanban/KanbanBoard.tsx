@@ -254,13 +254,15 @@ function TaskCard({
       ref={overlay ? undefined : setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...(overlay ? {} : attributes)}
+      {...(overlay ? {} : listeners)}
       onClick={() => {
         if (onSelect && selected !== undefined) { onSelect(task.id); return; }
         onTaskClick(task);
       }}
       className={cn(
-        'group relative bg-card rounded-lg p-3 border cursor-pointer select-none',
+        'group relative bg-card rounded-lg p-3 border select-none',
         'transition-all duration-150 animate-fade-in',
+        'cursor-grab active:cursor-grabbing',
         selected
           ? 'ring-2 ring-primary border-primary/50 shadow-sm'
           : isDragging
@@ -269,13 +271,11 @@ function TaskCard({
         overlay && 'shadow-2xl rotate-1 scale-105 border-border-strong opacity-95',
       )}
     >
-      {/* Drag handle */}
+      {/* Drag handle — visual hint only; entire card is now draggable */}
       {!overlay && (
         <div
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-          className="absolute left-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-60 transition-opacity cursor-grab active:cursor-grabbing p-1"
-          aria-label="Drag to reorder"
+          className="absolute left-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none p-1"
+          aria-hidden="true"
         >
           <GripVertical className="w-3 h-3 text-foreground-muted" />
         </div>
