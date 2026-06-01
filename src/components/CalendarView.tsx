@@ -33,6 +33,7 @@ const PRIORITY_DOT: Record<string, string> = {
 
 export default function CalendarView({ workspaceId, projectId, currentUserId, onTaskClick, onCreateWithDate }: Props) {
   const today = new Date();
+  const todayStr = ymd(today.getFullYear(), today.getMonth(), today.getDate());
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
@@ -80,11 +81,13 @@ export default function CalendarView({ workspaceId, projectId, currentUserId, on
     if (month === 11) { setYear(y => y + 1); setMonth(0); }
     else setMonth(m => m + 1);
   };
-  const goToday = () => { setYear(today.getFullYear()); setMonth(today.getMonth()); };
+  const goToday = () => {
+    setYear(today.getFullYear());
+    setMonth(today.getMonth());
+  };
 
   const totalDays = daysInMonth(year, month);
   const startDow = firstDayOfWeek(year, month);
-  const todayStr = ymd(today.getFullYear(), today.getMonth(), today.getDate());
 
   // Build grid cells: leading blanks + actual days
   const cells: { day: number | null }[] = [];
@@ -166,9 +169,12 @@ export default function CalendarView({ workspaceId, projectId, currentUserId, on
                 >
                   {cell.day && (
                     <>
-                      <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
-                        isToday ? 'bg-blue-600 text-white' : 'text-gray-500'
-                      }`}>
+                      <div
+                        suppressHydrationWarning
+                        className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
+                          isToday ? 'bg-blue-600 text-white' : 'text-gray-500'
+                        }`}
+                      >
                         {cell.day}
                       </div>
                       <div className="space-y-0.5">
