@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 import type { Webhook, WebhookEvent, WebhookDelivery, TwoFactorStatus, GitHubConnection } from '@/types';
 
 const ALL_EVENTS: WebhookEvent[] = [
@@ -150,25 +151,41 @@ function WebhookManager({ workspaceId }: { workspaceId: string }) {
       setForm({ name: '', url: '', events: [] });
       setShowForm(false);
       fetchWebhooks();
+      toast.success('Webhook created');
+    } catch {
+      toast.error('Failed to create webhook');
     } finally {
       setSaving(false);
     }
   };
 
   const toggleActive = async (wh: Webhook) => {
-    await api.patch(`/workspaces/${workspaceId}/webhooks/${wh.id}`, { is_active: !wh.is_active });
-    fetchWebhooks();
+    try {
+      await api.patch(`/workspaces/${workspaceId}/webhooks/${wh.id}`, { is_active: !wh.is_active });
+      fetchWebhooks();
+    } catch {
+      toast.error('Failed to update webhook');
+    }
   };
 
   const deleteWebhook = async (id: string) => {
     if (!confirm('Delete this webhook?')) return;
-    await api.delete(`/workspaces/${workspaceId}/webhooks/${id}`);
-    fetchWebhooks();
+    try {
+      await api.delete(`/workspaces/${workspaceId}/webhooks/${id}`);
+      fetchWebhooks();
+      toast.success('Webhook deleted');
+    } catch {
+      toast.error('Failed to delete webhook');
+    }
   };
 
   const testWebhook = async (id: string) => {
-    await api.post(`/workspaces/${workspaceId}/webhooks/${id}/test`);
-    alert('Test ping dispatched.');
+    try {
+      await api.post(`/workspaces/${workspaceId}/webhooks/${id}/test`);
+      toast.success('Test ping dispatched');
+    } catch {
+      toast.error('Failed to send test ping');
+    }
   };
 
   if (loading) return <p className="text-muted-foreground text-sm">Loading…</p>;
@@ -365,6 +382,9 @@ function UserDigestSettings() {
       await api.patch('/auth/me', prefs);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      toast.success('Preferences saved');
+    } catch {
+      toast.error('Failed to save preferences');
     } finally {
       setSaving(false);
     }
@@ -477,9 +497,12 @@ function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
       await api.post(`/workspaces/${workspaceId}/members`, { email: inviteEmail.trim(), role: inviteRole });
       setInviteEmail('');
       fetchMembers();
+      toast.success('Member invited');
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg ?? 'Failed to invite member.');
+      const errMsg = msg ?? 'Failed to invite member.';
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setInviting(false);
     }
@@ -487,8 +510,13 @@ function WorkspaceMembersManager({ workspaceId }: { workspaceId: string }) {
 
   const remove = async (memberId: string) => {
     if (!confirm('Remove this member from the workspace?')) return;
-    await api.delete(`/workspaces/${workspaceId}/members/${memberId}`);
-    fetchMembers();
+    try {
+      await api.delete(`/workspaces/${workspaceId}/members/${memberId}`);
+      fetchMembers();
+      toast.success('Member removed');
+    } catch {
+      toast.error('Failed to remove member');
+    }
   };
 
   const canManage = myRole === 'owner' || myRole === 'admin';
@@ -858,9 +886,12 @@ function GitHubSettings({ workspaceId }: { workspaceId: string }) {
       const { data } = await api.post<GitHubConnection>(`/workspaces/${workspaceId}/github`, { token: token.trim() });
       setConn(data);
       setToken('');
+      toast.success('GitHub connected');
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg ?? 'Failed to connect to GitHub.');
+      const errMsg = msg ?? 'Failed to connect to GitHub.';
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setConnecting(false);
     }
@@ -868,8 +899,13 @@ function GitHubSettings({ workspaceId }: { workspaceId: string }) {
 
   const disconnect = async () => {
     if (!confirm('Disconnect GitHub? Project links and issue numbers will be preserved but no longer synced.')) return;
-    await api.delete(`/workspaces/${workspaceId}/github`);
-    setConn({ connected: false });
+    try {
+      await api.delete(`/workspaces/${workspaceId}/github`);
+      setConn({ connected: false });
+      toast.success('GitHub disconnected');
+    } catch {
+      toast.error('Failed to disconnect GitHub');
+    }
   };
 
   const copySecret = (val: string) => {

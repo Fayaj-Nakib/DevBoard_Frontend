@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import ClientToaster from '@/components/ClientToaster';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' });
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' });
@@ -30,7 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
         >
           <TooltipProvider delay={300}>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              <ErrorBoundary>{children}</ErrorBoundary>
+            </AuthProvider>
           </TooltipProvider>
           <ClientToaster />
         </ThemeProvider>

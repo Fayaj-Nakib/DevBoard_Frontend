@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { format, isToday, isTomorrow } from 'date-fns';
 import {
@@ -419,21 +419,25 @@ export default function DashboardPage() {
   }, [tasks]);
 
   /* ── Project map (for task rows) ────────────────────────────────────────── */
-  const projectMap = Object.fromEntries(projects.map((p) => [p.id, p]));
+  const projectMap = useMemo(
+    () => Object.fromEntries(projects.map((p) => [p.id, p])),
+    [projects],
+  );
 
   /* ── Sorted projects ────────────────────────────────────────────────────── */
-  const sortedProjects = [...projects].sort((a, b) => {
+  const sortedProjects = useMemo(() => [...projects].sort((a, b) => {
     if (sortBy === 'name') return a.name.localeCompare(b.name);
     if (sortBy === 'tasks') return (b.tasks_count ?? 0) - (a.tasks_count ?? 0);
-    // updated
     return (b.updated_at ?? '').localeCompare(a.updated_at ?? '');
-  });
+  }), [projects, sortBy]);
 
   /* ── Upcoming deadlines ─────────────────────────────────────────────────── */
-  const upcoming = tasks
+  const upcoming = useMemo(() => tasks
     .filter((t) => t.due_date && t.status !== 'done')
     .sort((a, b) => (a.due_date ?? '') < (b.due_date ?? '') ? -1 : 1)
-    .slice(0, 8);
+    .slice(0, 8),
+    [tasks],
+  );
 
   // Group by day label
   const upcomingGroups: { label: string; tasks: DashTask[] }[] = [];

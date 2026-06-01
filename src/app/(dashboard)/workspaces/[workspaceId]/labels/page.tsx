@@ -6,6 +6,7 @@ import { Plus, Tag, X } from 'lucide-react';
 
 import api from '@/lib/api';
 import type { Label } from '@/types';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,21 +53,22 @@ export default function LabelsPage() {
         setCreateColor('#6366f1');
         setCreating(false);
         refresh();
+        toast.success('Label created');
       })
-      .catch(() => {})
+      .catch(() => toast.error('Failed to create label'))
       .finally(() => setCreateSaving(false));
   };
 
   const saveEdit = (id: string) => {
     api.patch(`/workspaces/${workspaceId}/labels/${id}`, { name: editName, color: editColor })
-      .then(() => { setEditingId(null); refresh(); })
-      .catch(() => {});
+      .then(() => { setEditingId(null); refresh(); toast.success('Label updated'); })
+      .catch(() => toast.error('Failed to update label'));
   };
 
   const deleteLabel = (id: string) => {
     api.delete(`/workspaces/${workspaceId}/labels/${id}`)
-      .then(() => refresh())
-      .catch(() => {});
+      .then(() => { refresh(); toast.success('Label deleted'); })
+      .catch(() => toast.error('Failed to delete label'));
   };
 
   const startEdit = (label: Label) => {

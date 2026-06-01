@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 import type { WorkspaceMember, Label, TaskStatus } from '@/types';
+import { toast } from 'sonner';
 
 interface Props {
   selectedIds: string[];
@@ -63,6 +64,13 @@ export default function BulkActionBar({ selectedIds, workspaceId, projectId, onC
       .catch(() => {});
   }, [workspaceId]);
 
+  const ACTION_LABELS: Record<string, string> = {
+    move_status: 'Tasks moved',
+    assign: 'Tasks assigned',
+    label: 'Labels applied',
+    delete: `${selectedIds.length} task(s) deleted`,
+  };
+
   const runBulk = async (action: string, payload: Record<string, unknown>) => {
     setBusy(true);
     try {
@@ -71,8 +79,11 @@ export default function BulkActionBar({ selectedIds, workspaceId, projectId, onC
         action,
         payload,
       });
+      toast.success(ACTION_LABELS[action] ?? 'Done');
       onRefresh();
       onClear();
+    } catch {
+      toast.error('Bulk action failed. Please try again.');
     } finally {
       setBusy(false);
     }
