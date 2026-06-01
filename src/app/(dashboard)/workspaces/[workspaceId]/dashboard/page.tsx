@@ -357,8 +357,7 @@ export default function DashboardPage() {
   const [tasks, setTasks] = useState<DashTask[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
-  // Start loading only when a user id is already available at mount
-  const [loadingTasks, setLoadingTasks] = useState(() => !!user?.id);
+  const [loadingTasks, setLoadingTasks] = useState(true);
   const [sortBy, setSortBy] = useState<'updated' | 'name' | 'tasks'>('updated');
 
 
@@ -380,6 +379,8 @@ export default function DashboardPage() {
         .then((r) => setTasks(Array.isArray(r.data) ? r.data : []))
         .catch(() => setTasks([]))
         .finally(() => setLoadingTasks(false));
+    } else {
+      setLoadingTasks(false);
     }
 
     api.get(`/workspaces/${workspaceId}/activity`, { params: { limit: 8 } })
