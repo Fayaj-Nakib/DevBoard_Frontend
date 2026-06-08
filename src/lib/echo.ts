@@ -26,7 +26,7 @@ const createEcho = () => {
     key,
     cluster,
     forceTLS: true,
-    authEndpoint: `${authBase}/api/broadcasting/auth`,
+    authEndpoint: `${authBase}/broadcasting/auth`,
     auth: {
       headers: {
         // Getter so the token is read fresh on each auth request, not at module init
