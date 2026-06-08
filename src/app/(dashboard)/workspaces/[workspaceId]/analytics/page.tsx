@@ -45,7 +45,8 @@ export default function WorkspaceAnalyticsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    api.get<ProjectStats>(`/workspaces/${workspaceId}/stats`)
+    setLoading(true);
+    api.get<ProjectStats>(`/workspaces/${workspaceId}/stats`, { params: { days: range } })
       .then((r) => { setStats(r.data); setError(false); })
       .catch((err) => {
         if (err?.response?.status === 404) {
@@ -55,7 +56,7 @@ export default function WorkspaceAnalyticsPage() {
         }
       })
       .finally(() => setLoading(false));
-  }, [workspaceId, refreshKey]);
+  }, [workspaceId, range, refreshKey]);
 
   if (loading) {
     return (
@@ -107,7 +108,7 @@ export default function WorkspaceAnalyticsPage() {
     { label: 'Closed tasks',    value: stats.closed_tasks,    color: 'text-success' },
     { label: 'Overdue',         value: stats.overdue_tasks,   color: 'text-destructive' },
     { label: 'Completion rate', value: `${stats.completion_rate}%`, color: 'text-foreground',
-      sub: `${stats.tasks_completed_last_30_days} done last 30d` },
+      sub: `${stats.tasks_completed_last_30_days} done last ${range}d` },
   ];
 
   const pieData = stats.tasks_by_status.map((s) => ({

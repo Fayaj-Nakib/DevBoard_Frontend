@@ -14,7 +14,6 @@ const createEcho = () => {
   const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER ?? 'ap2';
 
   if (!key) {
-    console.warn('Pusher key not set — real-time features disabled');
     return null;
   }
 
