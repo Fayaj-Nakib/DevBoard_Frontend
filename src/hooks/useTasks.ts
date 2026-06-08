@@ -30,22 +30,22 @@ export function useTasks(
   const [loading, setLoading] = useState(true);
   const channelRef = useRef<ReturnType<Echo<'pusher'>['private']> | null>(null);
 
+  const labelIdsKey    = (filters.label_ids ?? []).join(',');
+  const assigneeIdsKey = (filters.assignee_ids ?? []).join(',');
+  const milestoneKey   = filters.milestone_id ?? '';
+  const dueDateFromKey = filters.due_date_from ?? '';
+  const dueDateToKey   = filters.due_date_to ?? '';
+  const statusKey      = filters.status ?? '';
+  const hasSubtasksKey = filters.has_subtasks ? '1' : '';
+  const isOverdueKey   = filters.is_overdue ? '1' : '';
+  const watcherKey     = filters.watcher_id ?? '';
+  const sortByKey      = filters.sort_by ?? '';
+  const sortDirKey     = filters.sort_dir ?? '';
+
   const queryStr = useMemo(
     () => buildQueryString(filters),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      (filters.label_ids ?? []).join(','),
-      (filters.assignee_ids ?? []).join(','),
-      filters.milestone_id ?? '',
-      filters.due_date_from ?? '',
-      filters.due_date_to ?? '',
-      filters.status ?? '',
-      filters.has_subtasks ? '1' : '',
-      filters.is_overdue ? '1' : '',
-      filters.watcher_id ?? '',
-      filters.sort_by ?? '',
-      filters.sort_dir ?? '',
-    ],
+    [labelIdsKey, assigneeIdsKey, milestoneKey, dueDateFromKey, dueDateToKey, statusKey, hasSubtasksKey, isOverdueKey, watcherKey, sortByKey, sortDirKey],
   );
 
   const fetchTasks = useCallback(() => {
@@ -117,6 +117,13 @@ export function useTasks(
       channelRef.current = null;
     };
   }, [echo, projectId]);
+
+  // Polling fallback when Pusher is not configured
+  useEffect(() => {
+    if (echo) return;
+    const id = setInterval(fetchTasks, 30_000);
+    return () => clearInterval(id);
+  }, [echo, fetchTasks]);
 
   const reorder = async (items: { id: string; status: string; position: number }[]) => {
     await api.patch(`/workspaces/${workspaceId}/projects/${projectId}/tasks/reorder`, {

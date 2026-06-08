@@ -4,7 +4,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
-  LayoutDashboard,
   FolderKanban,
   Tag,
   Settings,

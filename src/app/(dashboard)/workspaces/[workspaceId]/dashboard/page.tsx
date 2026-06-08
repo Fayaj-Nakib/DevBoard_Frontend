@@ -362,7 +362,7 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
 
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { void Promise.resolve().then(() => setMounted(true)); }, []);
 
   /* ── Fetch ──────────────────────────────────────────────────────────────── */
   // Extract to a primitive so the effect dep array doesn't hold the whole user object

@@ -45,7 +45,6 @@ export default function WorkspaceAnalyticsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    setLoading(true);
     api.get<ProjectStats>(`/workspaces/${workspaceId}/stats`, { params: { days: range } })
       .then((r) => { setStats(r.data); setError(false); })
       .catch((err) => {

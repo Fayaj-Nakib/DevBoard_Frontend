@@ -523,6 +523,7 @@ function MembersSection({ workspaceId, projectId }: { workspaceId: string; proje
     }).finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadMembers(); }, [workspaceId, projectId]);
 
   const addMember = () => {
@@ -818,6 +819,7 @@ function StatusesSection({ workspaceId, projectId }: { workspaceId: string; proj
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadStatuses(); }, [workspaceId, projectId]);
 
   const updateStatus = (id: string, patch: Partial<ProjectStatus>) => {
@@ -1041,6 +1043,7 @@ function LabelsSection({ workspaceId, projectId }: { workspaceId: string; projec
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadLabels(); }, [workspaceId, projectId]);
 
   const updateLabel = (id: string, patch: { name?: string; color?: string }) => {
@@ -1170,6 +1173,7 @@ function CustomFieldsSection({ workspaceId, projectId }: { workspaceId: string; 
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadFields(); }, [workspaceId, projectId]);
 
   const addField = () => {
@@ -1318,6 +1322,7 @@ function TemplatesSection({ workspaceId, projectId }: { workspaceId: string; pro
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadTemplates(); }, [workspaceId, projectId]);
 
   const deleteTemplate = (id: string) => {
@@ -1630,6 +1635,7 @@ function AutomationsSection({ workspaceId, projectId }: { workspaceId: string; p
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadRules(); }, [workspaceId, projectId]);
 
   const openEditor = (rule?: AutomationRule) => {
@@ -1884,6 +1890,7 @@ function WebhooksSection({ workspaceId, projectId }: { workspaceId: string; proj
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadWebhooks(); }, [workspaceId, projectId]);
 
   const toggleEvent = (ev: WebhookEvent) => {
