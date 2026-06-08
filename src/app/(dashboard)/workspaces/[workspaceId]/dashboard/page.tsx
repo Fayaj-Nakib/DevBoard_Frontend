@@ -408,7 +408,7 @@ export default function DashboardPage() {
     try {
       const task = tasks.find((t) => t.id === taskId);
       const newStatus = task?.status === 'done' ? 'todo' : 'done';
-      await api.patch(`/tasks/${taskId}`, { status: newStatus });
+      await api.patch(`/workspaces/${workspaceId}/projects/${task!.project_id}/tasks/${taskId}`, { status: newStatus });
     } catch {
       // Revert on failure
       setTasks((prev) => prev.map((t) =>

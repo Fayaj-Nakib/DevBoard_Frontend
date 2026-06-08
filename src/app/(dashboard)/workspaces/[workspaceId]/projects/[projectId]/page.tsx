@@ -31,6 +31,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import KanbanBoard, { ReorderItem } from '@/components/kanban/KanbanBoard';
+import FilterBar from '@/components/FilterBar';
 import BacklogView from '@/components/BacklogView';
 import TimelineView from '@/components/TimelineView';
 import CalendarView from '@/components/CalendarView';
@@ -149,6 +150,7 @@ function ProjectPageInner() {
   const [showCreate, setShowCreate]             = useState(false);
   const [showSprints, setShowSprints]           = useState(false);
   const [showPalette, setShowPalette]           = useState(false);
+  const [showFilter, setShowFilter]             = useState(false);
   const [createStatusId, setCreateStatusId]     = useState<string | undefined>();
   const [createWithDate, setCreateWithDate]     = useState<string | undefined>();
   const [selectedIds, setSelectedIds]           = useState<Set<string>>(new Set());
@@ -209,17 +211,17 @@ function ProjectPageInner() {
 
   const handleMoveTask = useCallback(async (taskId: string, statusId: string) => {
     const status = statuses.find((s) => s.id === statusId);
-    await api.patch(`/tasks/${taskId}`, {
+    await api.patch(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`, {
       project_status_id: statusId,
       status: status?.slug ?? 'todo',
     });
     refresh();
-  }, [statuses, refresh]);
+  }, [workspaceId, projectId, statuses, refresh]);
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
-    await api.delete(`/tasks/${taskId}`);
+    await api.delete(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`);
     refresh();
-  }, [refresh]);
+  }, [workspaceId, projectId, refresh]);
 
   const handleAddStatus = useCallback(async (name: string, color: string) => {
     await api.post(`/workspaces/${workspaceId}/projects/${projectId}/statuses`, { name, color });
@@ -392,9 +394,9 @@ function ProjectPageInner() {
           size="sm"
           className={cn(
             'h-7 text-xs flex-shrink-0',
-            activeFilterCount > 0 && 'border-primary text-primary',
+            (activeFilterCount > 0 || showFilter) && 'border-primary text-primary',
           )}
-          onClick={() => handleFilterChange(filters)}
+          onClick={() => setShowFilter((v) => !v)}
         >
           <Filter className="w-3 h-3 mr-1.5" />
           {activeFilterCount > 0 ? `Filters · ${activeFilterCount}` : 'Filter'}
@@ -483,6 +485,18 @@ function ProjectPageInner() {
           <span className="hidden lg:inline text-[10px] text-foreground-muted">⌘K</span>
         </button>
       </div>
+
+      {/* ── Filter bar ───────────────────────────────────────────────────── */}
+      {showFilter && (
+        <div className="border-b border-border bg-background px-6 py-3 flex-shrink-0">
+          <FilterBar
+            workspaceId={workspaceId}
+            projectId={projectId}
+            filters={filters}
+            onChange={handleFilterChange}
+          />
+        </div>
+      )}
 
       {/* ── Layer 3: Content ──────────────────────────────────────────────── */}
       {activeTab === 'board' && (

@@ -422,7 +422,19 @@ export default function TaskDetailModal({
                 <DropdownMenuItem>
                   <Archive className="w-4 h-4" />Archive
                 </DropdownMenuItem>
-                <DropdownMenuItem variant="destructive">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={async () => {
+                    if (!confirm('Delete this task? This cannot be undone.')) return;
+                    try {
+                      await api.delete(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`);
+                      onUpdate();
+                      onClose();
+                    } catch {
+                      toast.error('Failed to delete task');
+                    }
+                  }}
+                >
                   <Trash2 className="w-4 h-4" />Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
