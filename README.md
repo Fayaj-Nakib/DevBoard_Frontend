@@ -16,7 +16,7 @@ DevBoard is a full-stack project management tool inspired by tools like Linear a
 
 This repository is the **Next.js 16 / React 19 frontend**. The Laravel API lives in a separate repo — see [devboard-api](https://github.com/Fayaj-Nakib/devboard-api).
 
-**Live demo:** https://devboard.vercel.app
+**Live demo:** https://devboard-frontend.vercel.app
 
 ---
 
@@ -129,15 +129,16 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `NEXT_PUBLIC_API_URL` | `http://127.0.0.1:8000/api` | Full URL of the Laravel API (including `/api`) |
-| `NEXT_PUBLIC_REVERB_APP_KEY` | `gwcvazc9cdiddfruhi7q` | Must match `REVERB_APP_KEY` in the backend `.env` |
-| `NEXT_PUBLIC_REVERB_HOST` | _(auto-derived)_ | WebSocket host — defaults to the hostname in `NEXT_PUBLIC_API_URL` |
-| `NEXT_PUBLIC_REVERB_PORT` | _(auto-derived)_ | WebSocket port — defaults to `8080` for http, `443` for https |
-| `NEXT_PUBLIC_REVERB_SCHEME` | _(auto-derived)_ | `http` or `https` — defaults to the scheme in `NEXT_PUBLIC_API_URL` |
+| `NEXT_PUBLIC_API_URL` | `http://127.0.0.1:8000/api` | Full URL of the Laravel API (including `/api`). In production, set to your Render service URL. |
+| `NEXT_PUBLIC_PUSHER_KEY` | `abc123` | Pusher Channels app key — **optional**. Without it the board polls every 30 s automatically. |
+| `NEXT_PUBLIC_PUSHER_CLUSTER` | `ap2` | Pusher cluster (default `ap2` for Asia-Pacific). |
 
-`NEXT_PUBLIC_REVERB_HOST/PORT/SCHEME` are automatically derived from `NEXT_PUBLIC_API_URL`, so in most deployments only `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_REVERB_APP_KEY` need to be set.
+**Pusher setup (optional, for instant real-time updates):**
+1. Sign up at [pusher.com](https://pusher.com) → create a free Channels app.
+2. Copy App Key + Cluster into `.env.local` (frontend) and `PUSHER_APP_ID/KEY/SECRET/CLUSTER` into the backend `.env`.
+3. Without Pusher credentials the app works fine — the Kanban board refreshes automatically every 30 seconds.
 
-In production (Vercel), set `NEXT_PUBLIC_API_URL` to your Render service URL, e.g. `https://devboard-api.onrender.com/api`.
+In production (Vercel), set `NEXT_PUBLIC_API_URL` to your Render service URL (check the Render dashboard for the exact `.onrender.com` URL).
 
 ---
 
@@ -152,8 +153,9 @@ vercel
 ```
 
 Or connect the GitHub repo to Vercel and set:
-- `NEXT_PUBLIC_API_URL` → your Render API URL (e.g. `https://devboard-api.onrender.com/api`)
-- `NEXT_PUBLIC_REVERB_APP_KEY` → the value of `REVERB_APP_KEY` on your Render backend
+- `NEXT_PUBLIC_API_URL` → your Render API URL (check Render dashboard for the `.onrender.com` URL, append `/api`)
+- `NEXT_PUBLIC_PUSHER_KEY` → your Pusher app key (optional)
+- `NEXT_PUBLIC_PUSHER_CLUSTER` → your Pusher cluster (e.g. `ap2`)
 
 Vercel will run `npm run build` automatically on every push to `main`.
 
