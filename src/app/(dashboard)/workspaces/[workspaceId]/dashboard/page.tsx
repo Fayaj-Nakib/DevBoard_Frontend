@@ -380,7 +380,7 @@ export default function DashboardPage() {
         .catch(() => setTasks([]))
         .finally(() => setLoadingTasks(false));
     } else {
-      setLoadingTasks(false);
+      void Promise.resolve().then(() => setLoadingTasks(false));
     }
 
     api.get(`/workspaces/${workspaceId}/activity`, { params: { limit: 8 } })
@@ -417,7 +417,7 @@ export default function DashboardPage() {
           : t,
       ));
     }
-  }, [tasks]);
+  }, [tasks, workspaceId]);
 
   /* ── Project map (for task rows) ────────────────────────────────────────── */
   const projectMap = useMemo(
