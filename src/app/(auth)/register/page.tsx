@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
@@ -222,7 +222,18 @@ export default function RegisterPage() {
 
           {/* Terms */}
           <div className="flex items-start gap-2 pt-1">
-            <Checkbox id="terms" {...register('terms')} className="mt-0.5" />
+            <Controller
+              name="terms"
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  id="terms"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  className="mt-0.5"
+                />
+              )}
+            />
             <label htmlFor="terms" className="text-sm text-foreground-secondary leading-relaxed cursor-pointer">
               I agree to the{' '}
               <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link>
