@@ -359,7 +359,10 @@ export default function DashboardPage() {
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [sortBy, setSortBy] = useState<'updated' | 'name' | 'tasks'>('updated');
+  const [mounted, setMounted] = useState(false);
 
+
+  useEffect(() => { setMounted(true); }, []);
 
   /* ── Fetch ──────────────────────────────────────────────────────────────── */
   // Extract to a primitive so the effect dep array doesn't hold the whole user object
@@ -458,11 +461,11 @@ export default function DashboardPage() {
       {/* ── Section 1: Page header ─────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground" suppressHydrationWarning>
-            {greeting()}, {user?.name?.split(' ')[0] ?? ''}
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {mounted ? `${greeting()}, ${user?.name?.split(' ')[0] ?? ''}` : ''}
           </h1>
-          <p className="text-sm text-foreground-tertiary mt-1" suppressHydrationWarning>
-            {format(new Date(), 'EEEE, MMMM d')}
+          <p className="text-sm text-foreground-tertiary mt-1">
+            {mounted ? format(new Date(), 'EEEE, MMMM d') : ''}
           </p>
         </div>
         <div className="flex gap-2 flex-shrink-0">
