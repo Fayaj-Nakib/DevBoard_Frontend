@@ -138,7 +138,7 @@ Open [http://localhost:3000](http://localhost:3000).
 2. Copy App Key + Cluster into `.env.local` (frontend) and `PUSHER_APP_ID/KEY/SECRET/CLUSTER` into the backend `.env`.
 3. Without Pusher credentials the app works fine — the Kanban board refreshes automatically every 30 seconds.
 
-In production (Vercel), set `NEXT_PUBLIC_API_URL` to your Render service URL (check the Render dashboard for the exact `.onrender.com` URL).
+In production (Vercel), set `NEXT_PUBLIC_API_URL=https://devboard-backend-50cx.onrender.com/api`.
 
 ---
 
@@ -153,7 +153,7 @@ vercel
 ```
 
 Or connect the GitHub repo to Vercel and set:
-- `NEXT_PUBLIC_API_URL` → your Render API URL (check Render dashboard for the `.onrender.com` URL, append `/api`)
+- `NEXT_PUBLIC_API_URL` → `https://devboard-backend-50cx.onrender.com/api`
 - `NEXT_PUBLIC_PUSHER_KEY` → your Pusher app key (optional)
 - `NEXT_PUBLIC_PUSHER_CLUSTER` → your Pusher cluster (e.g. `ap2`)
 
