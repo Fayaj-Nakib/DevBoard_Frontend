@@ -48,17 +48,11 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
-
-  const fillDemoCredentials = () => {
-    setValue('email', 'demo@devboard.app');
-    setValue('password', 'demo1234');
-  };
 
   /* ── Step 1: email + password ─────────────────────────────────────────── */
   const onCredentialsSubmit = async (values: LoginForm) => {
@@ -153,7 +147,7 @@ export default function LoginPage() {
 
   /* ── Credentials step UI ──────────────────────────────────────────────── */
   return (
-    <AuthLayout onFillDemo={fillDemoCredentials}>
+    <AuthLayout>
       <div className="space-y-6">
         {/* Header */}
         <div>
