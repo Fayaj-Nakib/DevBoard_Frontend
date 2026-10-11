@@ -2,6 +2,10 @@
 
 > Next.js frontend for DevBoard — a SaaS-style Kanban project management tool.
 
+**Live demo:** https://dev-board-frontend.vercel.app
+**Demo login:** `demo@devboard.app` / `demo1234`
+**Backend API:** https://github.com/Fayaj-Nakib/DevBoard_backend
+
 [![Web CI](https://github.com/Fayaj-Nakib/devboard-web/actions/workflows/ci.yml/badge.svg)](https://github.com/Fayaj-Nakib/devboard-web/actions/workflows/ci.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -14,9 +18,7 @@
 
 DevBoard is a full-stack project management tool inspired by tools like Linear and Trello. Teams can create **workspaces**, organise work into **projects**, and manage **tasks** on a drag-and-drop Kanban board.
 
-This repository is the **Next.js 16 / React 19 frontend**. The Laravel API lives in a separate repo — see [devboard-api](https://github.com/Fayaj-Nakib/devboard-api).
-
-**Live demo:** https://devboard-frontend.vercel.app
+This repository is the **Next.js 16 / React 19 frontend**. The Laravel API lives in a separate repo — see [DevBoard_backend](https://github.com/Fayaj-Nakib/DevBoard_backend).
 
 ---
 
